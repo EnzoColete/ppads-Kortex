@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, Package, Receipt, AlertTriangle, Database } from "lucide-react"
+import { Users, Package, Receipt, Database } from "lucide-react"
 import { getDashboardStats } from "@/lib/storage"
 import { PWAInstall } from "@/components/pwa-install"
 
@@ -136,26 +136,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Alertas recentes */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center text-sm lg:text-base">
-            <AlertTriangle className="mr-2 h-4 w-4 lg:h-5 lg:w-5 text-yellow-500" />
-            Alertas Recentes
-            {stats.unreadAlerts > 0 && (
-              <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">{stats.unreadAlerts}</span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-6 lg:py-8 text-gray-500 text-sm lg:text-base">
-            {stats.unreadAlerts === 0
-              ? "Nenhum alerta pendente no momento"
-              : `${stats.unreadAlerts} alerta(s) pendente(s) - Verifique a seção de Alertas`}
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
