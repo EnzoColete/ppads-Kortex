@@ -46,8 +46,8 @@ export function Sidebar() {
             <Image
               src="/kortex-logo.png"
               alt="Kortex - Gestão Pessoal Empresarial"
-              width={571}
-              height={228}
+              width={560}
+              height={224}
               className="object-contain"
               priority
             />
