@@ -6,7 +6,7 @@ import "./globals.css"
 import { Sidebar } from "@/components/sidebar"
 
 export const metadata: Metadata = {
-  title: "Sistema de Gestão - Fornecedores e Clientes",
+  title: "Kortex - Gestão Pessoal Empresarial",
   description: "Sistema completo para gestão de fornecedores e clientes",
   generator: "v0.dev",
   manifest: "/manifest.json",
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Sistema de Gestão",
+    title: "Kortex",
   },
 }
 
@@ -30,7 +30,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#3b82f6" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Sistema de Gestão" />
+        <meta name="apple-mobile-web-app-title" content="Kortex" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-TileColor" content="#3b82f6" />
         <meta name="msapplication-config" content="/browserconfig.xml" />

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { Home, Users, Package, Receipt, FileText, Download, CheckSquare, X, Menu } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
+import Image from "next/image"
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
@@ -41,8 +42,16 @@ export function Sidebar() {
         )}
       >
         <div className="p-6 pt-16 lg:pt-6">
-          <h1 className="text-xl font-bold text-gray-900">Sistema de Gestão</h1>
-          <p className="text-sm text-gray-600 mt-1">Fornecedores & Clientes</p>
+          <div className="flex items-center justify-center">
+            <Image
+              src="/kortex-logo.png"
+              alt="Kortex - Gestão Pessoal Empresarial"
+              width={200}
+              height={80}
+              className="object-contain"
+              priority
+            />
+          </div>
         </div>
 
         <nav className="mt-6">
