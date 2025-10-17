@@ -65,6 +65,7 @@ export default function ReceiptsPage() {
     )
   })
 
+<<<<<<< HEAD
   const formatDate = (dateValue: any): string => {
     try {
       let date: Date
@@ -90,6 +91,8 @@ export default function ReceiptsPage() {
     }
   }
 
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
   const handleCreateReceipt = async (data: Omit<Receipt, "id" | "createdAt" | "updatedAt">) => {
     try {
       const newReceipt = await receiptStorage.create(data)
@@ -132,7 +135,11 @@ export default function ReceiptsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Recibos</h1>
+<<<<<<< HEAD
           <p className="text-gray-600 mt-2">Gerencie recibos de clientes</p>
+=======
+          <p className="text-gray-600 mt-2">Gerencie recibos de fornecedores e clientes</p>
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
         </div>
         <Button onClick={() => setShowForm(true)} className="flex items-center gap-2">
           <Plus className="h-4 w-4" />
@@ -141,7 +148,11 @@ export default function ReceiptsPage() {
       </div>
 
       {/* Estatísticas */}
+<<<<<<< HEAD
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+=======
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
@@ -154,8 +165,26 @@ export default function ReceiptsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
+<<<<<<< HEAD
               <div className="text-2xl font-bold text-green-600">{receipts.filter((r) => r.hasInvoice).length}</div>
               <p className="text-sm text-gray-600">Recibos com Nota Fiscal</p>
+=======
+              <div className="text-2xl font-bold text-green-600">
+                {receipts.filter((r) => r.type === "supplier").length}
+              </div>
+              <p className="text-sm text-gray-600">Recibos de Fornecedores</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">
+                {receipts.filter((r) => r.type === "client").length}
+              </div>
+              <p className="text-sm text-gray-600">Recibos de Clientes</p>
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
             </div>
           </CardContent>
         </Card>
@@ -220,7 +249,11 @@ export default function ReceiptsPage() {
                         </p>
                       )}
                       <p className="text-xs text-gray-500">
+<<<<<<< HEAD
                         Emitido em: {formatDate(receipt.date || receipt.createdAt)}
+=======
+                        Emitido em: {new Date(receipt.createdAt).toLocaleDateString("pt-BR")}
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
                       </p>
                     </div>
                   </div>

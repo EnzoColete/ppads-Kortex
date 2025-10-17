@@ -105,6 +105,7 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+<<<<<<< HEAD
             {/* Seleção de cliente */}
             <div>
               <Label htmlFor="client">Cliente *</Label>
@@ -118,10 +119,63 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
                       {client.name}
                     </SelectItem>
                   ))}
+=======
+            {/* Tipo de recibo */}
+            <div>
+              <Label htmlFor="type">Tipo de Recibo *</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value: "supplier" | "client") => handleChange("type", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="supplier">Fornecedor</SelectItem>
+                  <SelectItem value="client">Cliente</SelectItem>
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
                 </SelectContent>
               </Select>
             </div>
 
+<<<<<<< HEAD
+=======
+            {/* Seleção de fornecedor/cliente */}
+            {formData.type === "supplier" ? (
+              <div>
+                <Label htmlFor="supplier">Fornecedor *</Label>
+                <Select value={formData.supplierId} onValueChange={(value) => handleChange("supplierId", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o fornecedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div>
+                <Label htmlFor="client">Cliente *</Label>
+                <Select value={formData.clientId} onValueChange={(value) => handleChange("clientId", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
             {/* Produtos */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
@@ -205,6 +259,7 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
             </div>
 
             {/* Campos específicos para cliente */}
+<<<<<<< HEAD
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -215,6 +270,20 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
                 <Label htmlFor="hasInvoice">Possui Nota Fiscal (NF)</Label>
               </div>
             </div>
+=======
+            {formData.type === "client" && (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="hasInvoice"
+                    checked={formData.hasInvoice}
+                    onCheckedChange={(checked) => handleChange("hasInvoice", checked as boolean)}
+                  />
+                  <Label htmlFor="hasInvoice">Possui Nota Fiscal (NF)</Label>
+                </div>
+              </div>
+            )}
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 
             {/* Observações */}
             <div>

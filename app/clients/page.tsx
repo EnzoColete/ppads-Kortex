@@ -4,11 +4,18 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+<<<<<<< HEAD
 import { Plus, Search, Edit, Trash2, AlertCircle } from "lucide-react"
 import { clientStorage } from "@/lib/storage"
 import type { Client } from "@/lib/types"
 import { ClientForm } from "@/components/client-form"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+=======
+import { Plus, Search, Edit, Trash2 } from "lucide-react"
+import { clientStorage } from "@/lib/storage"
+import type { Client } from "@/lib/types"
+import { ClientForm } from "@/components/client-form"
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
@@ -16,7 +23,10 @@ export default function ClientsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
+<<<<<<< HEAD
   const [error, setError] = useState<string | null>(null)
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 
   useEffect(() => {
     loadClients()
@@ -42,12 +52,16 @@ export default function ClientsPage() {
 
   const handleCreateClient = async (data: Omit<Client, "id" | "createdAt" | "updatedAt">) => {
     try {
+<<<<<<< HEAD
       setError(null)
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       const newClient = await clientStorage.create(data)
       setClients([...clients, newClient])
       setShowForm(false)
     } catch (error) {
       console.error("Erro ao criar cliente:", error)
+<<<<<<< HEAD
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido ao criar cliente"
 
       setError(errorMessage)
@@ -63,13 +77,18 @@ export default function ClientsPage() {
           setSearchTerm(data.cpfCnpj)
         }
       }
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
     }
   }
 
   const handleUpdateClient = async (data: Omit<Client, "id" | "createdAt" | "updatedAt">) => {
     if (!editingClient) return
     try {
+<<<<<<< HEAD
       setError(null)
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       const updated = await clientStorage.update(editingClient.id, data)
       if (updated) {
         setClients(clients.map((c) => (c.id === editingClient.id ? updated : c)))
@@ -78,8 +97,11 @@ export default function ClientsPage() {
       }
     } catch (error) {
       console.error("Erro ao atualizar cliente:", error)
+<<<<<<< HEAD
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido ao atualizar cliente"
       setError(errorMessage)
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
     }
   }
 
@@ -97,13 +119,19 @@ export default function ClientsPage() {
   const handleEdit = (client: Client) => {
     setEditingClient(client)
     setShowForm(true)
+<<<<<<< HEAD
     setError(null)
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
   }
 
   const handleCloseForm = () => {
     setShowForm(false)
     setEditingClient(null)
+<<<<<<< HEAD
     setError(null)
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
   }
 
   if (loading) {
@@ -130,6 +158,7 @@ export default function ClientsPage() {
         </Button>
       </div>
 
+<<<<<<< HEAD
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -137,6 +166,8 @@ export default function ClientsPage() {
         </Alert>
       )}
 
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       {/* Barra de busca */}
       <Card>
         <CardContent className="pt-6">

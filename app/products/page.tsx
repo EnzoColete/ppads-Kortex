@@ -4,11 +4,30 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+<<<<<<< HEAD
+=======
+import { Badge } from "@/components/ui/badge"
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { productStorage } from "@/lib/storage"
 import type { Product } from "@/lib/types"
 import { ProductForm } from "@/components/product-form"
 
+<<<<<<< HEAD
+=======
+const productTypeLabels = {
+  nitrogen: "Nitrogênio",
+  semen: "Sêmen",
+  other: "Outro",
+}
+
+const productTypeBadgeColors = {
+  nitrogen: "bg-blue-100 text-blue-800",
+  semen: "bg-green-100 text-green-800",
+  other: "bg-gray-100 text-gray-800",
+}
+
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -34,7 +53,11 @@ export default function ProductsPage() {
     (product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+<<<<<<< HEAD
       product.unit.toLowerCase().includes(searchTerm.toLowerCase()),
+=======
+      productTypeLabels[product.type].toLowerCase().includes(searchTerm.toLowerCase()),
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
   )
 
   const handleCreateProduct = async (data: Omit<Product, "id" | "createdAt" | "updatedAt">) => {
@@ -91,7 +114,11 @@ export default function ProductsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Produtos</h1>
+<<<<<<< HEAD
           <p className="text-gray-600 mt-2">Gerencie seus produtos livremente</p>
+=======
+          <p className="text-gray-600 mt-2">Gerencie seus produtos (Nitrogênio, Sêmen e outros)</p>
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
         </div>
         <Button onClick={() => setShowForm(true)} className="flex items-center gap-2">
           <Plus className="h-4 w-4" />
@@ -99,12 +126,20 @@ export default function ProductsPage() {
         </Button>
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Barra de busca */}
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       <Card>
         <CardContent className="pt-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
+<<<<<<< HEAD
               placeholder="Buscar por nome, descrição ou unidade..."
+=======
+              placeholder="Buscar por nome, descrição ou tipo..."
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -113,6 +148,7 @@ export default function ProductsPage() {
         </CardContent>
       </Card>
 
+<<<<<<< HEAD
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -147,6 +183,9 @@ export default function ProductsPage() {
         </Card>
       </div>
 
+=======
+      {/* Lista de produtos */}
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       <div className="grid gap-4">
         {filteredProducts.length === 0 ? (
           <Card>
@@ -164,6 +203,10 @@ export default function ProductsPage() {
                   <div className="space-y-2 flex-1">
                     <div className="flex items-center gap-3">
                       <h3 className="text-lg font-semibold">{product.name}</h3>
+<<<<<<< HEAD
+=======
+                      <Badge className={productTypeBadgeColors[product.type]}>{productTypeLabels[product.type]}</Badge>
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
                     </div>
                     <div className="text-sm text-gray-600 space-y-1">
                       <p>Descrição: {product.description}</p>
@@ -197,6 +240,46 @@ export default function ProductsPage() {
         )}
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Estatísticas por tipo */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {products.filter((p) => p.type === "nitrogen").length}
+              </div>
+              <p className="text-sm text-gray-600">Produtos de Nitrogênio</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">
+                {products.filter((p) => p.type === "semen").length}
+              </div>
+              <p className="text-sm text-gray-600">Produtos de Sêmen</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-600">
+                {products.filter((p) => p.type === "other").length}
+              </div>
+              <p className="text-sm text-gray-600">Outros Produtos</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Formulário */}
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       {showForm && (
         <ProductForm
           product={editingProduct}

@@ -23,10 +23,17 @@ export interface Client {
 export interface Product {
   id: string
   name: string
+<<<<<<< HEAD
   description: string
   price: number
   unit: string
   type?: string // Optional type field for backward compatibility
+=======
+  type: "nitrogen" | "semen" | "other"
+  description: string
+  price: number
+  unit: string
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
   createdAt: Date
   updatedAt: Date
 }
@@ -75,7 +82,11 @@ export interface Report {
 export interface DailyExpense {
   id: string
   date: string
+<<<<<<< HEAD
   category: string
+=======
+  category: "alimentacao" | "combustivel" | "pedagio" | "fornecedor"
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
   amount: number
   observations?: string
   supplierId?: string
@@ -95,6 +106,7 @@ export interface CalendarEvent {
   daysSince?: number
   alertLevel?: "green" | "yellow" | "orange" | "red"
 }
+<<<<<<< HEAD
 
 export interface User {
   id: string
@@ -133,3 +145,5 @@ export interface ServiceOrderItem {
   total: number
   createdAt: Date
 }
+=======
+>>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
