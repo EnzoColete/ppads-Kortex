@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-<<<<<<< HEAD
 import {
   Home,
   Users,
@@ -24,15 +23,6 @@ import { UserMenu } from "./user-menu"
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Ordens de Serviço", href: "/service-orders", icon: ClipboardList },
-=======
-import { Home, Users, Package, Receipt, FileText, Download, CheckSquare, X, Menu } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { useState } from "react"
-import Image from "next/image"
-
-const navigation = [
-  { name: "Dashboard", href: "/", icon: Home },
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
   { name: "Fornecedores", href: "/suppliers", icon: Users },
   { name: "Clientes", href: "/clients", icon: Users },
   { name: "Produtos", href: "/products", icon: Package },
@@ -40,10 +30,7 @@ const navigation = [
   { name: "Gastos Diários", href: "/expenses", icon: CheckSquare },
   { name: "Relatórios", href: "/reports", icon: FileText },
   { name: "Exportar", href: "/export", icon: Download },
-<<<<<<< HEAD
   { name: "Usuários", href: "/users", icon: UserCog, adminOnly: true },
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 ]
 
 export function Sidebar() {
@@ -65,11 +52,7 @@ export function Sidebar() {
 
       <div
         className={cn(
-<<<<<<< HEAD
           "fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out flex flex-col",
-=======
-          "fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out",
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
@@ -86,11 +69,7 @@ export function Sidebar() {
           </div>
         </div>
 
-<<<<<<< HEAD
         <nav className="mt-6 flex-1">
-=======
-        <nav className="mt-6">
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
           <ul className="space-y-1 px-3">
             {navigation.map((item) => {
               const isActive = pathname === item.href
@@ -112,7 +91,6 @@ export function Sidebar() {
             })}
           </ul>
         </nav>
-<<<<<<< HEAD
 
         <div className="p-4 border-t border-gray-200">
           <div className="flex items-center justify-between">
@@ -120,8 +98,6 @@ export function Sidebar() {
             <UserMenu />
           </div>
         </div>
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       </div>
     </>
   )

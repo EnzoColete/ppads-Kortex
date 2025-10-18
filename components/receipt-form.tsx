@@ -33,12 +33,68 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
     { productId: "", quantity: 1, unitPrice: 0, total: 0 },
   ])
 
+  const handleChange = (field: string, value: string | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleTypeChange = (value: "supplier" | "client") => {
+    setFormData((prev) => ({
+      ...prev,
+      type: value,
+      supplierId: value === "supplier" ? prev.supplierId : "",
+      clientId: value === "client" ? prev.clientId : "",
+      hasInvoice: value === "client" ? prev.hasInvoice : false,
+    }))
+  }
+
+  const handleProductChange = (index: number, field: keyof ReceiptProduct, value: string | number) => {
+    const newProducts = [...receiptProducts]
+    newProducts[index] = { ...newProducts[index], [field]: value }
+
+    if (field === "quantity" || field === "unitPrice") {
+      const quantity = Number(newProducts[index].quantity) || 0
+      const unitPrice = Number(newProducts[index].unitPrice) || 0
+      newProducts[index].total = quantity * unitPrice
+    }
+
+    if (field === "productId" && value) {
+      const product = products.find((p) => p.id === value)
+      if (product) {
+        const quantity = Number(newProducts[index].quantity) || 0
+        newProducts[index].unitPrice = product.price
+        newProducts[index].total = quantity * product.price
+      }
+    }
+
+    setReceiptProducts(newProducts)
+  }
+
+  const addProduct = () => {
+    setReceiptProducts([...receiptProducts, { productId: "", quantity: 1, unitPrice: 0, total: 0 }])
+  }
+
+  const removeProduct = (index: number) => {
+    if (receiptProducts.length > 1) {
+      setReceiptProducts(receiptProducts.filter((_, i) => i !== index))
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (formData.type === "client" && !formData.clientId) {
+      alert("Selecione um cliente para continuar.")
+      return
+    }
+
+    if (formData.type === "supplier" && !formData.supplierId) {
+      alert("Selecione um fornecedor para continuar.")
+      return
+    }
+
     const validProducts = receiptProducts.filter((p) => p.productId && p.quantity > 0)
     if (validProducts.length === 0) {
-      alert("Adicione pelo menos um produto ao recibo")
+      alert("Adicione pelo menos um produto ao recibo.")
       return
     }
 
@@ -57,41 +113,6 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
     onSubmit(data)
   }
 
-  const handleChange = (field: string, value: string | boolean) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleProductChange = (index: number, field: keyof ReceiptProduct, value: string | number) => {
-    const newProducts = [...receiptProducts]
-    newProducts[index] = { ...newProducts[index], [field]: value }
-
-    // Recalcular total do produto
-    if (field === "quantity" || field === "unitPrice") {
-      newProducts[index].total = newProducts[index].quantity * newProducts[index].unitPrice
-    }
-
-    // Auto-preencher preço unitário quando produto é selecionado
-    if (field === "productId" && value) {
-      const product = products.find((p) => p.id === value)
-      if (product) {
-        newProducts[index].unitPrice = product.price
-        newProducts[index].total = newProducts[index].quantity * product.price
-      }
-    }
-
-    setReceiptProducts(newProducts)
-  }
-
-  const addProduct = () => {
-    setReceiptProducts([...receiptProducts, { productId: "", quantity: 1, unitPrice: 0, total: 0 }])
-  }
-
-  const removeProduct = (index: number) => {
-    if (receiptProducts.length > 1) {
-      setReceiptProducts(receiptProducts.filter((_, i) => i !== index))
-    }
-  }
-
   const totalAmount = receiptProducts.reduce((sum, p) => sum + p.total, 0)
 
   return (
@@ -105,78 +126,55 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-<<<<<<< HEAD
-            {/* Seleção de cliente */}
-            <div>
-              <Label htmlFor="client">Cliente *</Label>
-              <Select value={formData.clientId} onValueChange={(value) => handleChange("clientId", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-=======
-            {/* Tipo de recibo */}
-            <div>
-              <Label htmlFor="type">Tipo de Recibo *</Label>
-              <Select
-                value={formData.type}
-                onValueChange={(value: "supplier" | "client") => handleChange("type", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="supplier">Fornecedor</SelectItem>
-                  <SelectItem value="client">Cliente</SelectItem>
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="type">Tipo de Recibo *</Label>
+                <Select value={formData.type} onValueChange={(value: "supplier" | "client") => handleTypeChange(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="client">Cliente</SelectItem>
+                    <SelectItem value="supplier">Fornecedor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {formData.type === "client" ? (
+                <div>
+                  <Label htmlFor="client">Cliente *</Label>
+                  <Select value={formData.clientId} onValueChange={(value) => handleChange("clientId", value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="supplier">Fornecedor *</Label>
+                  <Select value={formData.supplierId} onValueChange={(value) => handleChange("supplierId", value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o fornecedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suppliers.map((supplier) => (
+                        <SelectItem key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
-<<<<<<< HEAD
-=======
-            {/* Seleção de fornecedor/cliente */}
-            {formData.type === "supplier" ? (
-              <div>
-                <Label htmlFor="supplier">Fornecedor *</Label>
-                <Select value={formData.supplierId} onValueChange={(value) => handleChange("supplierId", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o fornecedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suppliers.map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div>
-                <Label htmlFor="client">Cliente *</Label>
-                <Select value={formData.clientId} onValueChange={(value) => handleChange("clientId", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
-            {/* Produtos */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <Label>Produtos *</Label>
@@ -215,12 +213,14 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
                         min="1"
                         step="0.01"
                         value={receiptProduct.quantity}
-                        onChange={(e) => handleProductChange(index, "quantity", Number.parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          handleProductChange(index, "quantity", Number.parseFloat(e.target.value) || 0)
+                        }
                       />
                     </div>
 
                     <div>
-                      <Label>Preço Unit.</Label>
+                      <Label>Preco Unit.</Label>
                       <Input
                         type="number"
                         min="0"
@@ -258,9 +258,7 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
               </div>
             </div>
 
-            {/* Campos específicos para cliente */}
-<<<<<<< HEAD
-            <div className="space-y-4">
+            {formData.type === "client" && (
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="hasInvoice"
@@ -269,30 +267,15 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
                 />
                 <Label htmlFor="hasInvoice">Possui Nota Fiscal (NF)</Label>
               </div>
-            </div>
-=======
-            {formData.type === "client" && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="hasInvoice"
-                    checked={formData.hasInvoice}
-                    onCheckedChange={(checked) => handleChange("hasInvoice", checked as boolean)}
-                  />
-                  <Label htmlFor="hasInvoice">Possui Nota Fiscal (NF)</Label>
-                </div>
-              </div>
             )}
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 
-            {/* Observações */}
             <div>
-              <Label htmlFor="observations">Observações</Label>
+              <Label htmlFor="observations">Observacoes</Label>
               <Textarea
                 id="observations"
                 value={formData.observations}
                 onChange={(e) => handleChange("observations", e.target.value)}
-                placeholder="Observações adicionais..."
+                placeholder="Observacoes adicionais..."
                 rows={3}
               />
             </div>
@@ -311,3 +294,4 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
     </div>
   )
 }
+

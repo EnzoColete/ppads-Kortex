@@ -22,7 +22,6 @@ export function ReceiptView({ receipt, suppliers, clients, products, onClose }: 
     return value.toFixed(2)
   }
 
-<<<<<<< HEAD
   const formatDate = (dateValue: any): string => {
     try {
       // Try to parse the date from various formats
@@ -50,8 +49,6 @@ export function ReceiptView({ receipt, suppliers, clients, products, onClose }: 
     }
   }
 
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
   const getEntity = () => {
     if (receipt.type === "supplier" && receipt.supplierId) {
       return suppliers.find((s) => s.id === receipt.supplierId)
@@ -92,13 +89,7 @@ export function ReceiptView({ receipt, suppliers, clients, products, onClose }: 
           <div className="text-center border-b pb-4">
             <h1 className="text-2xl font-bold">RECIBO</h1>
             <p className="text-gray-600">#{receipt.id}</p>
-<<<<<<< HEAD
             <p className="text-sm text-gray-500">Emitido em: {formatDate(receipt.date || receipt.createdAt)}</p>
-=======
-            <p className="text-sm text-gray-500">
-              Emitido em: {new Date(receipt.createdAt || new Date()).toLocaleDateString("pt-BR")}
-            </p>
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
           </div>
 
           {/* Informações da entidade */}
@@ -172,11 +163,7 @@ export function ReceiptView({ receipt, suppliers, clients, products, onClose }: 
           {/* Rodapé */}
           <div className="text-center text-sm text-gray-500 border-t pt-4">
             <p>Este recibo foi gerado automaticamente pelo Sistema de Gestão</p>
-<<<<<<< HEAD
             <p>Data de emissão: {formatDate(receipt.date || receipt.createdAt)}</p>
-=======
-            <p>Data de emissão: {new Date(receipt.createdAt || new Date()).toLocaleString("pt-BR")}</p>
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
           </div>
         </CardContent>
       </Card>

@@ -1,11 +1,17 @@
-<<<<<<< HEAD
-import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
+import { createServerClient } from "@supabase/ssr"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 
 export async function createClient() {
   const cookieStore = await cookies()
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Supabase environment variables are not configured")
+  }
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
@@ -14,17 +20,17 @@ export async function createClient() {
         try {
           cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
         } catch (error) {
-          // Handle cookie setting errors
+          console.error("Failed to set Supabase auth cookies:", error)
         }
       },
     },
   })
 }
-=======
-import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
+export const supabaseAdmin =
+  supabaseServiceKey && process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL, supabaseServiceKey)
+    : undefined
+

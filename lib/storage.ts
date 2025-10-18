@@ -8,15 +8,10 @@ import type {
   ReceiptProduct,
   Report,
   CalendarEvent,
-<<<<<<< HEAD
   ServiceOrder,
 } from "./types"
 import { supabase } from "./supabase/client"
 import { logger } from "./logger"
-=======
-} from "./types"
-import { supabase } from "./supabase/client"
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 
 const mapClientToDb = (client: any) => {
   const { cpfCnpj, ...rest } = client
@@ -37,7 +32,6 @@ const mapClientFromDb = (client: any) => {
 // Suppliers
 export const supplierStorage = {
   getAll: async (): Promise<Supplier[]> => {
-<<<<<<< HEAD
     const startTime = Date.now()
     try {
       const { data, error } = await supabase.from("suppliers").select("*").order("created_at", { ascending: false })
@@ -48,30 +42,17 @@ export const supplierStorage = {
 
       if (error) {
         logger.error("Error fetching suppliers", error)
-=======
-    try {
-      const { data, error } = await supabase.from("suppliers").select("*").order("created_at", { ascending: false })
-
-      if (error) {
-        console.error("Error fetching suppliers:", error)
-        // Return empty array instead of throwing error
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
         return []
       }
 
       return data || []
     } catch (error) {
-<<<<<<< HEAD
       logger.error("Error connecting to database", error as Error, { table: "suppliers" })
-=======
-      console.error("Error connecting to database:", error)
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       return []
     }
   },
 
   getById: async (id: string): Promise<Supplier | undefined> => {
-<<<<<<< HEAD
     const startTime = Date.now()
     const { data, error } = await supabase.from("suppliers").select("*").eq("id", id).single()
 
@@ -79,12 +60,6 @@ export const supplierStorage = {
 
     if (error) {
       logger.error("Error fetching supplier", error, { id })
-=======
-    const { data, error } = await supabase.from("suppliers").select("*").eq("id", id).single()
-
-    if (error) {
-      console.error("Error fetching supplier:", error)
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       return undefined
     }
 
@@ -92,7 +67,6 @@ export const supplierStorage = {
   },
 
   create: async (supplier: Omit<Supplier, "id" | "createdAt" | "updatedAt">): Promise<Supplier> => {
-<<<<<<< HEAD
     const startTime = Date.now()
     try {
       const { data, error } = await supabase.from("suppliers").insert([supplier]).select().single()
@@ -112,25 +86,11 @@ export const supplierStorage = {
       return data
     } catch (error) {
       logger.error("Error creating supplier", error as Error)
-=======
-    try {
-      const { data, error } = await supabase.from("suppliers").insert([supplier]).select().single()
-
-      if (error) {
-        console.error("Error creating supplier:", error)
-        throw new Error("Não foi possível criar o fornecedor. Verifique se o Supabase está configurado.")
-      }
-
-      return data
-    } catch (error) {
-      console.error("Error creating supplier:", error)
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       throw new Error("Erro de conexão com o banco de dados.")
     }
   },
 
   update: async (id: string, updates: Partial<Supplier>): Promise<Supplier | null> => {
-<<<<<<< HEAD
     const startTime = Date.now()
     const { data, error } = await supabase.from("suppliers").update(updates).eq("id", id).select().single()
 
@@ -146,20 +106,10 @@ export const supplierStorage = {
       changes: Object.keys(updates),
     })
 
-=======
-    const { data, error } = await supabase.from("suppliers").update(updates).eq("id", id).select().single()
-
-    if (error) {
-      console.error("Error updating supplier:", error)
-      return null
-    }
-
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
     return data
   },
 
   delete: async (id: string): Promise<boolean> => {
-<<<<<<< HEAD
     const startTime = Date.now()
     const { error } = await supabase.from("suppliers").delete().eq("id", id)
 
@@ -172,15 +122,6 @@ export const supplierStorage = {
 
     logger.logBusinessEvent("supplier_deleted", { supplierId: id })
 
-=======
-    const { error } = await supabase.from("suppliers").delete().eq("id", id)
-
-    if (error) {
-      console.error("Error deleting supplier:", error)
-      return false
-    }
-
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
     return true
   },
 }
@@ -215,7 +156,6 @@ export const clientStorage = {
   },
 
   create: async (client: Omit<Client, "id" | "createdAt" | "updatedAt">): Promise<Client> => {
-<<<<<<< HEAD
     const { data: existingEmailClient, error: emailCheckError } = await supabase
       .from("clients")
       .select("id, email, name")
@@ -246,14 +186,11 @@ export const clientStorage = {
       throw new Error(`Já existe um cliente cadastrado com este CPF/CNPJ: ${existingCpfClient.name}`)
     }
 
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
     const dbClient = mapClientToDb(client)
     const { data, error } = await supabase.from("clients").insert([dbClient]).select().single()
 
     if (error) {
       console.error("Error creating client:", error)
-<<<<<<< HEAD
       if (error.code === "23505") {
         if (error.message.includes("clients_email_key")) {
           throw new Error("Já existe um cliente cadastrado com este email")
@@ -263,8 +200,6 @@ export const clientStorage = {
         }
         throw new Error("Já existe um cliente cadastrado com estes dados")
       }
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       throw error
     }
 
@@ -325,7 +260,6 @@ export const productStorage = {
   },
 
   create: async (product: Omit<Product, "id" | "createdAt" | "updatedAt">): Promise<Product> => {
-<<<<<<< HEAD
     const productData = {
       name: product.name,
       description: product.description || "",
@@ -336,9 +270,6 @@ export const productStorage = {
     }
 
     const { data, error } = await supabase.from("products").insert([productData]).select().single()
-=======
-    const { data, error } = await supabase.from("products").insert([product]).select().single()
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 
     if (error) {
       console.error("Error creating product:", error)
@@ -735,7 +666,6 @@ export const calendarEventStorage = {
   },
 }
 
-<<<<<<< HEAD
 // Service Orders
 export const serviceOrderStorage = {
   getAll: async (): Promise<ServiceOrder[]> => {
@@ -994,8 +924,6 @@ export const serviceOrderStorage = {
   },
 }
 
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 export const getSuppliers = async (): Promise<Supplier[]> => await supplierStorage.getAll()
 export const getClients = async (): Promise<Client[]> => await clientStorage.getAll()
 export const getProducts = async (): Promise<Product[]> => await productStorage.getAll()
@@ -1004,10 +932,7 @@ export const getAlerts = async (): Promise<Alert[]> => await alertStorage.getAll
 export const getDailyExpenses = async (): Promise<DailyExpense[]> => await dailyExpenseStorage.getAll()
 export const getReports = async (): Promise<Report[]> => await reportStorage.getAll()
 export const getCalendarEvents = async (): Promise<CalendarEvent[]> => await calendarEventStorage.getAll()
-<<<<<<< HEAD
 export const getServiceOrders = async (): Promise<ServiceOrder[]> => await serviceOrderStorage.getAll()
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
 
 export const saveDailyExpense = async (expense: Omit<DailyExpense, "id" | "createdAt">): Promise<DailyExpense> =>
   await dailyExpenseStorage.create(expense)
@@ -1017,21 +942,14 @@ export const getDashboardStats = async () => {
   try {
     console.log("[v0] Starting getDashboardStats")
 
-<<<<<<< HEAD
     const [suppliers, clients, products, receipts, alerts, expenses, serviceOrders] = await Promise.all([
-=======
-    const [suppliers, clients, products, receipts, alerts, expenses] = await Promise.all([
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
       supplierStorage.getAll(),
       clientStorage.getAll(),
       productStorage.getAll(),
       receiptStorage.getAll(),
       alertStorage.getAll(),
       dailyExpenseStorage.getAll(),
-<<<<<<< HEAD
       serviceOrderStorage.getAll(),
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
     ])
 
     console.log("[v0] Data fetched successfully:", {
@@ -1041,10 +959,7 @@ export const getDashboardStats = async () => {
       receipts: receipts.length,
       alerts: alerts.length,
       expenses: expenses.length,
-<<<<<<< HEAD
       serviceOrders: serviceOrders.length,
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
     })
 
     const currentMonth = new Date().getMonth()
@@ -1078,10 +993,7 @@ export const getDashboardStats = async () => {
       totalRevenue,
       totalExpenses,
       netProfit,
-<<<<<<< HEAD
       totalServiceOrders: serviceOrders.length || 0,
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
     }
 
     console.log("[v0] Dashboard stats calculated:", stats)
@@ -1097,10 +1009,7 @@ export const getDashboardStats = async () => {
       totalRevenue: 0,
       totalExpenses: 0,
       netProfit: 0,
-<<<<<<< HEAD
       totalServiceOrders: 0,
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
     }
   }
 }
@@ -1124,15 +1033,12 @@ export const setupRealtimeSubscription = (callback: () => void) => {
     supabase
       .channel("calendar_events")
       .on("postgres_changes", { event: "*", schema: "public", table: "calendar_events" }, callback),
-<<<<<<< HEAD
     supabase
       .channel("service_orders")
       .on("postgres_changes", { event: "*", schema: "public", table: "service_orders" }, callback),
     supabase
       .channel("service_order_items")
       .on("postgres_changes", { event: "*", schema: "public", table: "service_order_items" }, callback),
-=======
->>>>>>> 3969ce6e07b797e7bc94ebcb0efc8cecfcf4b892
   ]
 
   channels.forEach((channel) => channel.subscribe())
