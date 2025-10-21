@@ -1,189 +1,144 @@
-"use client"
+﻿"use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Plus, Search, Edit, Trash2 } from "lucide-react"
+import { Edit, Plus, Search, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import type { User } from "@/lib/types"
 import { UserForm } from "@/components/user-form"
 import { RoleBadge } from "@/components/role-badge"
 import { ProtectedRoute } from "@/components/protected-route"
 
+function UnauthorizedMessage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <Card className="max-w-md">
+        <CardContent className="space-y-4 py-8 text-center">
+          <h1 className="text-2xl font-semibold text-gray-900">Acesso restrito</h1>
+          <p className="text-gray-600">Esta aba esta disponivel apenas para administradores.</p>
+          <Button asChild>
+            <Link href="/">Voltar para a pagina inicial</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function UsersPageContent() {
   const [users, setUsers] = useState<User[]>([])
   const [searchTerm, setSearchTerm] = useState("")
-  const [showForm, setShowForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [isFormOpen, setIsFormOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadUsers()
+    void loadUsers()
   }, [])
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false })
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, email, full_name, email_verified, role, created_at, updated_at")
+        .order("created_at", { ascending: false })
 
       if (error) throw error
 
       setUsers(
-        (data || []).map((u) => ({
-          id: u.id,
-          email: u.email,
-          name: u.name,
-          role: u.role,
-          createdAt: new Date(u.created_at),
-          updatedAt: new Date(u.updated_at),
+        (data || []).map((row) => ({
+          id: row.id,
+          email: row.email,
+          fullName: row.full_name,
+          emailVerified: Boolean(row.email_verified),
+          role: row.role,
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.updated_at),
         })),
       )
-    } catch (error) {
-      console.error("Error loading users:", error)
+    } catch (err) {
+      console.error("Error loading users:", err)
     } finally {
       setLoading(false)
     }
   }
 
   const filteredUsers = users.filter((user) => {
-    const searchLower = searchTerm.toLowerCase()
-    return user.name.toLowerCase().includes(searchLower) || user.email.toLowerCase().includes(searchLower)
+    const query = searchTerm.toLowerCase()
+    return user.fullName.toLowerCase().includes(query) || user.email.toLowerCase().includes(query)
   })
 
-  const handleCreateUser = async (data: Omit<User, "id" | "createdAt" | "updatedAt">) => {
-    try {
-      const { data: newUser, error } = await supabase
-        .from("users")
-        .insert([{ email: data.email, name: data.name, role: data.role }])
-        .select()
-        .single()
-
-      if (error) throw error
-
-      setUsers([
-        {
-          id: newUser.id,
-          email: newUser.email,
-          name: newUser.name,
-          role: newUser.role,
-          createdAt: new Date(newUser.created_at),
-          updatedAt: new Date(newUser.updated_at),
-        },
-        ...users,
-      ])
-      setShowForm(false)
-    } catch (error) {
-      console.error("Error creating user:", error)
-      alert("Erro ao criar usuário")
-    }
-  }
-
-  const handleUpdateUser = async (data: Omit<User, "id" | "createdAt" | "updatedAt">) => {
+  const handleUpdateUser = async (data: Pick<User, "email" | "fullName" | "role">) => {
     if (!editingUser) return
 
     try {
       const { data: updated, error } = await supabase
         .from("users")
-        .update({ name: data.name, role: data.role })
-        .eq("id", editingUser.id)
-        .select()
+        .update({ full_name: data.fullName.trim(), role: data.role })
+        .eq("email", editingUser.email)
+        .select("id, email, full_name, email_verified, role, created_at, updated_at")
         .single()
 
       if (error) throw error
 
-      setUsers(
-        users.map((u) =>
-          u.id === editingUser.id
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.email === editingUser.email
             ? {
                 id: updated.id,
                 email: updated.email,
-                name: updated.name,
+                fullName: updated.full_name,
+                emailVerified: Boolean(updated.email_verified),
                 role: updated.role,
                 createdAt: new Date(updated.created_at),
                 updatedAt: new Date(updated.updated_at),
               }
-            : u,
+            : user,
         ),
       )
-      setShowForm(false)
+      setIsFormOpen(false)
       setEditingUser(null)
-    } catch (error) {
-      console.error("Error updating user:", error)
-      alert("Erro ao atualizar usuário")
+    } catch (err) {
+      console.error("Error updating user:", err)
+      alert("Erro ao atualizar usuario")
     }
   }
 
-  const handleDeleteUser = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este usuário?")) {
-      try {
-        const { error } = await supabase.from("users").delete().eq("id", id)
+  const handleDeleteUser = async (email: string) => {
+    if (!confirm("Tem certeza que deseja excluir este usuario?")) return
 
-        if (error) throw error
-
-        setUsers(users.filter((u) => u.id !== id))
-      } catch (error) {
-        console.error("Error deleting user:", error)
-        alert("Erro ao excluir usuário")
-      }
+    try {
+      const { error } = await supabase.from("users").delete().eq("email", email)
+      if (error) throw error
+      setUsers((prev) => prev.filter((user) => user.email !== email))
+    } catch (err) {
+      console.error("Error deleting user:", err)
+      alert("Erro ao excluir usuario")
     }
   }
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64">Carregando usuários...</div>
+    return <div className="py-8 text-center text-sm text-gray-500">Carregando usuarios...</div>
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gerenciamento de Usuários</h1>
-          <p className="text-gray-600 mt-2">Gerencie usuários e suas permissões</p>
+          <h1 className="text-3xl font-bold text-gray-900">Usuarios</h1>
+          <p className="text-gray-600 mt-2">Gerencie niveis de acesso e dados dos usuarios</p>
         </div>
-        <Button
-          onClick={() => {
-            setShowForm(true)
-            setEditingUser(null)
-          }}
-          className="flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Novo Usuário
+        <Button asChild className="flex items-center gap-2">
+          <Link href="/auth/register">
+            <Plus className="h-4 w-4" />
+            Novo cadastro
+          </Link>
         </Button>
       </div>
 
-      {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-600">{users.filter((u) => u.role === "admin").length}</div>
-              <p className="text-sm text-gray-600">Administradores</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
-                {users.filter((u) => u.role === "technician").length}
-              </div>
-              <p className="text-sm text-gray-600">Técnicos</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{users.filter((u) => u.role === "client").length}</div>
-              <p className="text-sm text-gray-600">Clientes</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Barra de busca */}
       <Card>
         <CardContent className="pt-6">
           <div className="relative">
@@ -191,20 +146,19 @@ function UsersPageContent() {
             <Input
               placeholder="Buscar por nome ou email..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(event) => setSearchTerm(event.target.value)}
               className="pl-10"
             />
           </div>
         </CardContent>
       </Card>
 
-      {/* Lista de usuários */}
       <div className="grid gap-4">
         {filteredUsers.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
               <div className="text-center py-8 text-gray-500">
-                {searchTerm ? "Nenhum usuário encontrado" : "Nenhum usuário cadastrado"}
+                {searchTerm ? "Nenhum usuario encontrado" : "Nenhum usuario cadastrado"}
               </div>
             </CardContent>
           </Card>
@@ -215,7 +169,7 @@ function UsersPageContent() {
                 <div className="flex justify-between items-start">
                   <div className="space-y-2 flex-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-semibold">{user.name}</h3>
+                      <h3 className="text-lg font-semibold">{user.fullName}</h3>
                       <RoleBadge role={user.role} />
                     </div>
                     <div className="text-sm text-gray-600 space-y-1">
@@ -223,7 +177,10 @@ function UsersPageContent() {
                         <span className="font-medium">Email:</span> {user.email}
                       </p>
                       <p className="text-xs text-gray-500">
-                        Criado em: {new Date(user.createdAt).toLocaleDateString("pt-BR")}
+                        Criado em: {user.createdAt.toLocaleDateString("pt-BR")}
+                      </p>
+                      <p className="text-xs">
+                        Status: {user.emailVerified ? "Email verificado" : "Aguardando confirmacao"}
                       </p>
                     </div>
                   </div>
@@ -233,7 +190,7 @@ function UsersPageContent() {
                       size="sm"
                       onClick={() => {
                         setEditingUser(user)
-                        setShowForm(true)
+                        setIsFormOpen(true)
                       }}
                     >
                       <Edit className="h-4 w-4" />
@@ -241,7 +198,7 @@ function UsersPageContent() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDeleteUser(user.id)}
+                      onClick={() => handleDeleteUser(user.email)}
                       className="text-red-600 hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -254,13 +211,12 @@ function UsersPageContent() {
         )}
       </div>
 
-      {/* Formulário */}
-      {showForm && (
+      {isFormOpen && editingUser && (
         <UserForm
-          user={editingUser}
-          onSubmit={editingUser ? handleUpdateUser : handleCreateUser}
+          user={{ email: editingUser.email, fullName: editingUser.fullName, role: editingUser.role }}
+          onSubmit={(formData) => handleUpdateUser({ email: editingUser.email, fullName: formData.fullName, role: formData.role })}
           onCancel={() => {
-            setShowForm(false)
+            setIsFormOpen(false)
             setEditingUser(null)
           }}
         />
@@ -271,7 +227,7 @@ function UsersPageContent() {
 
 export default function UsersPage() {
   return (
-    <ProtectedRoute allowedRoles={["admin"]}>
+    <ProtectedRoute allowedRoles={["admin"]} fallback={<UnauthorizedMessage />}>
       <UsersPageContent />
     </ProtectedRoute>
   )

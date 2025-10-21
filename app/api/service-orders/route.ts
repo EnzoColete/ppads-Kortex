@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server"
-import { serviceOrderStorage } from "@/lib/storage"
+﻿import { NextResponse } from "next/server"
 import { logApiRequest, logApiResponse, logApiError } from "@/lib/api-logger"
 import { requirePermission } from "@/lib/rbac"
+import { getCurrentUser } from "@/lib/auth"
 import { logger } from "@/lib/logger"
+import { serviceOrdersRepository } from "@/lib/server/service-orders-repository"
 
 export async function GET(request: Request) {
   const { startTime } = await logApiRequest(request)
@@ -10,7 +11,7 @@ export async function GET(request: Request) {
   try {
     await requirePermission("service_orders", "read")
 
-    const orders = await serviceOrderStorage.getAll()
+    const orders = await serviceOrdersRepository.getAll()
 
     logger.logBusinessEvent("service_orders_listed", {
       count: orders.length,
@@ -23,7 +24,9 @@ export async function GET(request: Request) {
     return NextResponse.json(orders)
   } catch (error) {
     logApiError("GET", "/api/service-orders", error as Error)
-    return NextResponse.json({ error: "Failed to fetch service orders" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to fetch service orders"
+    const status = message.toLowerCase().includes("acesso negado") ? 403 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }
 
@@ -31,10 +34,15 @@ export async function POST(request: Request) {
   const { startTime } = await logApiRequest(request)
 
   try {
-    await requirePermission("service_orders", "create")
+    const currentUser = await getCurrentUser()
+    const normalizedRole = currentUser?.role?.trim().toLowerCase()
+
+    if (normalizedRole !== "client") {
+      await requirePermission("service_orders", "create")
+    }
 
     const body = await request.json()
-    const order = await serviceOrderStorage.create(body)
+    const order = await serviceOrdersRepository.create(body)
 
     logger.logBusinessEvent("service_order_created", {
       orderId: order.id,
@@ -50,6 +58,9 @@ export async function POST(request: Request) {
     return NextResponse.json(order, { status: 201 })
   } catch (error) {
     logApiError("POST", "/api/service-orders", error as Error)
-    return NextResponse.json({ error: "Failed to create service order" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to create service order"
+    const status = message.toLowerCase().includes("acesso negado") ? 403 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }
+

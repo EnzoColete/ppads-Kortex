@@ -77,7 +77,8 @@ export default function ServiceOrdersPage() {
       setEditingOrder(null)
     } catch (error) {
       console.error("Error creating order:", error)
-      alert("Erro ao criar ordem de serviço")
+      const message = error instanceof Error ? error.message : "Erro ao criar ordem de serviço"
+      alert(message)
     }
   }
 

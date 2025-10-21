@@ -57,6 +57,7 @@ const rolePermissions: Record<Role, Permission[]> = {
   ],
   client: [
     // Clients can only view their own service orders
+    { resource: "service_orders", action: "create" },
     { resource: "service_orders", action: "read" },
     { resource: "receipts", action: "read" },
   ],
@@ -66,7 +67,16 @@ export async function checkPermission(resource: string, action: Permission["acti
   const user = await getCurrentUser()
   if (!user) return false
 
-  const permissions = rolePermissions[user.role]
+  let normalizedRole = (user.role || "").trim().toLowerCase() as Role
+  if (!rolePermissions[normalizedRole]) {
+    normalizedRole = "client"
+  }
+
+  const permissions = rolePermissions[normalizedRole]
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[RBAC] user", { email: user.email, role: user.role, normalizedRole, resource, action })
+  }
+
   return permissions.some((p) => p.resource === resource && p.action === action)
 }
 

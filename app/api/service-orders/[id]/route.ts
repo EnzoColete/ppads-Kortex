@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
-import { serviceOrderStorage } from "@/lib/storage"
 import { logApiRequest, logApiResponse, logApiError } from "@/lib/api-logger"
 import { requirePermission } from "@/lib/rbac"
 import { logger } from "@/lib/logger"
+import { serviceOrdersRepository } from "@/lib/server/service-orders-repository"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const { startTime } = await logApiRequest(request)
@@ -11,7 +11,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
   try {
     await requirePermission("service_orders", "read")
 
-    const order = await serviceOrderStorage.getById(id)
+    const order = await serviceOrdersRepository.getById(id)
 
     if (!order) {
       logApiResponse("GET", `/api/service-orders/${id}`, 404, startTime)
@@ -22,7 +22,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
     return NextResponse.json(order)
   } catch (error) {
     logApiError("GET", `/api/service-orders/${id}`, error as Error)
-    return NextResponse.json({ error: "Failed to fetch service order" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to fetch service order"
+    const status = message.toLowerCase().includes("acesso negado") ? 403 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }
 
@@ -34,7 +36,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     await requirePermission("service_orders", "update")
 
     const body = await request.json()
-    const order = await serviceOrderStorage.update(id, body)
+    const order = await serviceOrdersRepository.update(id, body)
 
     if (!order) {
       logApiResponse("PATCH", `/api/service-orders/${id}`, 404, startTime)
@@ -51,7 +53,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json(order)
   } catch (error) {
     logApiError("PATCH", `/api/service-orders/${id}`, error as Error)
-    return NextResponse.json({ error: "Failed to update service order" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to update service order"
+    const status = message.toLowerCase().includes("acesso negado") ? 403 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }
 
@@ -62,7 +66,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   try {
     await requirePermission("service_orders", "delete")
 
-    const success = await serviceOrderStorage.delete(id)
+    const success = await serviceOrdersRepository.delete(id)
 
     if (!success) {
       logApiResponse("DELETE", `/api/service-orders/${id}`, 404, startTime)
@@ -77,6 +81,8 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     return NextResponse.json({ success: true })
   } catch (error) {
     logApiError("DELETE", `/api/service-orders/${id}`, error as Error)
-    return NextResponse.json({ error: "Failed to delete service order" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to delete service order"
+    const status = message.toLowerCase().includes("acesso negado") ? 403 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }

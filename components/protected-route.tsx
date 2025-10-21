@@ -34,7 +34,7 @@ export function ProtectedRoute({ children, allowedRoles, fallback }: ProtectedRo
       }
 
       // Fetch user role from users table
-      const { data: userData, error } = await supabase.from("users").select("role").eq("id", user.id).single()
+      const { data: userData, error } = await supabase.from("users").select("role").eq("email", user.email).single()
 
       if (error || !userData) {
         console.error("Error fetching user role:", error)

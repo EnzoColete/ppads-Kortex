@@ -1,22 +1,28 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import "./globals.css"
 import { Sidebar } from "@/components/sidebar"
 
 export const metadata: Metadata = {
-  title: "Kortex - Gestão Pessoal Empresarial",
-  description: "Sistema completo para gestão de fornecedores e clientes",
+  title: "Kortex - Gest\u00e3o Pessoal Empresarial",
+  description: "Sistema completo para Gest\u00e3o de fornecedores e clientes",
   generator: "v0.dev",
   manifest: "/manifest.json",
   themeColor: "#3b82f6",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Kortex",
   },
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 }
 
 export default function RootLayout({

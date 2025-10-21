@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,38 +8,47 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X } from "lucide-react"
-import type { User } from "@/lib/types"
 import type { Role } from "@/lib/rbac"
 
+interface UserFormData {
+  email: string
+  fullName: string
+  role: Role
+}
+
 interface UserFormProps {
-  user?: User | null
-  onSubmit: (data: Omit<User, "id" | "createdAt" | "updatedAt">) => void
+  user?: UserFormData | null
+  onSubmit: (data: UserFormData) => void
   onCancel: () => void
 }
 
 export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<UserFormData>({
     email: user?.email || "",
-    name: user?.name || "",
+    fullName: user?.fullName || "",
     role: (user?.role || "client") as Role,
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
 
-    if (!formData.email || !formData.name) {
-      alert("Preencha todos os campos obrigatórios")
+    if (!formData.email || !formData.fullName) {
+      alert("Preencha todos os campos obrigatorios")
       return
     }
 
-    onSubmit(formData)
+    onSubmit({
+      email: formData.email.trim().toLowerCase(),
+      fullName: formData.fullName.trim(),
+      role: formData.role,
+    })
   }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <Card className="w-full max-w-md">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>{user ? "Editar Usuário" : "Novo Usuário"}</CardTitle>
+          <CardTitle>{user ? "Editar Usuario" : "Novo Usuario"}</CardTitle>
           <Button variant="ghost" size="icon" onClick={onCancel}>
             <X className="h-4 w-4" />
           </Button>
@@ -53,42 +61,39 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
                 id="email"
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(event) => setFormData({ ...formData, email: event.target.value })}
                 required
-                disabled={!!user}
+                disabled={Boolean(user)}
               />
-              {user && <p className="text-xs text-gray-500 mt-1">O email não pode ser alterado</p>}
+              {user && <p className="text-xs text-gray-500 mt-1">O email nao pode ser alterado</p>}
             </div>
 
             <div>
-              <Label htmlFor="name">Nome *</Label>
+              <Label htmlFor="fullName">Nome completo *</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                id="fullName"
+                value={formData.fullName}
+                onChange={(event) => setFormData({ ...formData, fullName: event.target.value })}
                 required
               />
             </div>
 
             <div>
-              <Label htmlFor="role">Nível de Acesso *</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) => setFormData({ ...formData, role: value as Role })}
-              >
+              <Label htmlFor="role">Nivel de Acesso *</Label>
+              <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value as Role })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Administrador</SelectItem>
-                  <SelectItem value="technician">Técnico</SelectItem>
+                  <SelectItem value="technician">Tecnico</SelectItem>
                   <SelectItem value="client">Cliente</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500 mt-1">
                 {formData.role === "admin" && "Acesso total ao sistema"}
-                {formData.role === "technician" && "Pode gerenciar ordens de serviço"}
-                {formData.role === "client" && "Acesso limitado às próprias ordens"}
+                {formData.role === "technician" && "Pode gerenciar ordens de servico"}
+                {formData.role === "client" && "Acesso limitado as proprias ordens"}
               </p>
             </div>
 
@@ -96,7 +101,7 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
               <Button type="button" variant="outline" onClick={onCancel}>
                 Cancelar
               </Button>
-              <Button type="submit">{user ? "Atualizar" : "Criar"} Usuário</Button>
+              <Button type="submit">{user ? "Atualizar" : "Criar"} Usuario</Button>
             </div>
           </form>
         </CardContent>

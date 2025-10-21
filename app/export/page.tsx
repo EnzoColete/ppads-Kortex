@@ -4,19 +4,18 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Download, FileText, Table, Users, Package } from "lucide-react"
-import { supplierStorage, clientStorage, productStorage, receiptStorage, alertStorage } from "@/lib/storage"
-import type { Supplier, Client, Product, Receipt, Alert } from "@/lib/types"
+import { Download, Table, Users, Package } from "lucide-react"
+import { supplierStorage, clientStorage, productStorage, receiptStorage } from "@/lib/storage"
+import type { Supplier, Client, Product, Receipt } from "@/lib/types"
 import { exportToExcel } from "@/lib/excel-export"
 
-type ExportType = "suppliers" | "clients" | "products" | "receipts" | "alerts"
+type ExportType = "suppliers" | "clients" | "products" | "receipts"
 
 export default function ExportPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [receipts, setReceipts] = useState<Receipt[]>([])
-  const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
 
   const [exportType, setExportType] = useState<ExportType>("suppliers")
@@ -28,19 +27,17 @@ export default function ExportPage() {
 
   const loadData = async () => {
     try {
-      const [suppliersData, clientsData, productsData, receiptsData, alertsData] = await Promise.all([
+      const [suppliersData, clientsData, productsData, receiptsData] = await Promise.all([
         supplierStorage.getAll(),
         clientStorage.getAll(),
         productStorage.getAll(),
         receiptStorage.getAll(),
-        alertStorage.getAll(),
       ])
 
       setSuppliers(suppliersData)
       setClients(clientsData)
       setProducts(productsData)
       setReceipts(receiptsData)
-      setAlerts(alertsData)
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
     } finally {
@@ -64,7 +61,7 @@ export default function ExportPage() {
               { header: "Email", key: "email", width: 30 },
               { header: "Telefone", key: "phone", width: 20 },
               { header: "CNPJ", key: "cnpj", width: 20 },
-              { header: "Endere√ßo", key: "address", width: 40 },
+              { header: "EndereÁo", key: "address", width: 40 },
               { header: "Data Cadastro", key: "createdAt", width: 15 },
             ],
             data: suppliers.map((s) => ({
@@ -87,7 +84,7 @@ export default function ExportPage() {
               { header: "Email", key: "email", width: 30 },
               { header: "Telefone", key: "phone", width: 20 },
               { header: "CPF/CNPJ", key: "cpfCnpj", width: 20 },
-              { header: "Endere√ßo", key: "address", width: 40 },
+              { header: "EndereÁo", key: "address", width: 40 },
               { header: "Data Cadastro", key: "createdAt", width: 15 },
             ],
             data: clients.map((c) => ({
@@ -107,8 +104,8 @@ export default function ExportPage() {
             sheetName: "Produtos",
             columns: [
               { header: "Nome", key: "name", width: 30 },
-              { header: "Descri√ß√£o", key: "description", width: 40 },
-              { header: "Pre√ßo", key: "price", width: 15 },
+              { header: "DescriÁ„o", key: "description", width: 40 },
+              { header: "PreÁo", key: "price", width: 15 },
               { header: "Unidade", key: "unit", width: 15 },
               { header: "Tipo", key: "type", width: 20 },
               { header: "Data Cadastro", key: "createdAt", width: 15 },
@@ -131,53 +128,22 @@ export default function ExportPage() {
             columns: [
               { header: "ID", key: "id", width: 15 },
               { header: "Tipo", key: "type", width: 15 },
-              { header: "Cliente", key: "entityName", width: 30 },
+              { header: "Cliente/Fornecedor", key: "entityName", width: 30 },
               { header: "Total", key: "total", width: 15 },
-              { header: "Possui NF", key: "hasInvoice", width: 12 },
-              { header: "Observa√ß√µes", key: "observations", width: 40 },
               { header: "Data", key: "date", width: 15 },
             ],
-            data: receipts.map((r) => {
-              const entity = clients.find((c) => c.id === r.clientId)
-              return {
-                id: r.id.slice(0, 8),
-                type: "Cliente",
-                entityName: entity?.name || "N/A",
-                total: `R$ ${r.total.toFixed(2)}`,
-                hasInvoice: r.hasInvoice ? "Sim" : "N√£o",
-                observations: r.observations || "",
-                date: new Date(r.date).toLocaleDateString("pt-BR"),
-              }
-            }),
-          })
-          break
-
-        case "alerts":
-          exportToExcel({
-            filename: `alertas-${timestamp}`,
-            sheetName: "Alertas",
-            columns: [
-              { header: "Cliente", key: "clientName", width: 30 },
-              { header: "Tipo", key: "type", width: 20 },
-              { header: "Mensagem", key: "message", width: 50 },
-              { header: "Status", key: "status", width: 15 },
-              { header: "Data", key: "createdAt", width: 15 },
-            ],
-            data: alerts.map((a) => {
-              const client = clients.find((c) => c.id === a.clientId)
-              return {
-                clientName: client?.name || "N/A",
-                type: a.type.replace("days", " dias"),
-                message: a.message,
-                status: a.isRead ? "Lido" : "N√£o lido",
-                createdAt: new Date(a.createdAt).toLocaleDateString("pt-BR"),
-              }
-            }),
+            data: receipts.map((r) => ({
+              id: r.id.slice(0, 8),
+              type: r.type === "supplier" ? "Fornecedor" : "Cliente",
+              entityName: r.entityName || "N/A",
+              total: `R$ ${r.total.toFixed(2)}`,
+              date: new Date(r.date).toLocaleDateString("pt-BR"),
+            })),
           })
           break
       }
 
-      alert("Exporta√ß√£o conclu√≠da com sucesso!")
+      alert("ExportaÁ„o concluÌda com sucesso!")
     } catch (error) {
       console.error("Erro ao exportar:", error)
       alert("Erro ao exportar dados. Tente novamente.")
@@ -196,8 +162,6 @@ export default function ExportPage() {
         return products.length
       case "receipts":
         return receipts.length
-      case "alerts":
-        return alerts.length
       default:
         return 0
     }
@@ -221,8 +185,7 @@ export default function ExportPage() {
         <p className="text-gray-600 mt-2">Exporte seus dados em formato Excel</p>
       </div>
 
-      {/* Estat√≠sticas */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
@@ -262,22 +225,11 @@ export default function ExportPage() {
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <FileText className="h-8 w-8 text-red-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold">{alerts.length}</div>
-              <p className="text-sm text-gray-600">Alertas</p>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Configura√ß√µes de exporta√ß√£o */}
       <Card>
         <CardHeader>
-          <CardTitle>Configura√ß√µes de Exporta√ß√£o</CardTitle>
+          <CardTitle>ConfiguraÁıes de ExportaÁ„o</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
@@ -291,18 +243,17 @@ export default function ExportPage() {
                 <SelectItem value="clients">Clientes ({clients.length})</SelectItem>
                 <SelectItem value="products">Produtos ({products.length})</SelectItem>
                 <SelectItem value="receipts">Recibos ({receipts.length})</SelectItem>
-                <SelectItem value="alerts">Alertas ({alerts.length})</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <h3 className="font-medium text-blue-900 mb-2">Resumo da Exporta√ß√£o:</h3>
+            <h3 className="font-medium text-blue-900 mb-2">Resumo da ExportaÁ„o:</h3>
             <p className="text-sm text-blue-800">
-              Ser√° exportado: <strong>{getDataCount()} registro(s)</strong> em formato <strong>Excel (.csv)</strong>
+              Ser· exportado: <strong>{getDataCount()} registro(s)</strong> em formato <strong>Excel (.csv)</strong>
             </p>
             <p className="text-xs text-blue-600 mt-2">
-              O arquivo ser√° compat√≠vel com Microsoft Excel, Google Sheets e LibreOffice Calc
+              O arquivo ser· compatÌvel com Microsoft Excel, Google Sheets e LibreOffice Calc
             </p>
           </div>
 

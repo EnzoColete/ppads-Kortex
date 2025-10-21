@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Supplier {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String         @db.VarChar(255)
+  email          String         @unique @db.VarChar(255)
+  phone          String         @db.VarChar(20)
+  address        String         @db.Text
+  cnpj           String         @unique @db.VarChar(20)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  receipts       Receipt[]      @relation("ReceiptSupplier")
+  dailyExpenses  DailyExpense[] @relation("DailyExpenseSupplier")
+
+  @@map("suppliers")
+  @@index([name])
+  @@index([cnpj])
+}
+
+model Client {
+  id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String           @db.VarChar(255)
+  email      String           @unique @db.VarChar(255)
+  phone      String           @db.VarChar(20)
+  address    String           @db.Text
+  cpfCnpj    String           @unique @map("cpf_cnpj") @db.VarChar(20)
+  latitude   Decimal?         @db.Decimal(10, 8)
+  longitude  Decimal?         @db.Decimal(11, 8)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  receipts      Receipt[]        @relation("ReceiptClient")
+  serviceOrders ServiceOrder[]
+
+  @@map("clients")
+  @@index([name])
+  @@index([cpfCnpj])
+}
+
+model Product {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String            @db.VarChar(255)
+  type        String?           @db.VarChar(30)
+  description String?           @db.Text
+  price       Decimal           @db.Decimal(10, 2)
+  unit        String            @db.VarChar(30)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  receiptItems ReceiptProduct[]
+  serviceOrderItems ServiceOrderItem[]
+
+  @@map("products")
+  @@index([type])
+}
+
+model Receipt {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type         ReceiptType
+  supplierId   String?       @map("supplier_id") @db.Uuid
+  clientId     String?       @map("client_id") @db.Uuid
+  entityName   String?       @map("entity_name") @db.VarChar(255)
+  description  String?       @db.Text
+  date         DateTime      @db.Date
+  total        Decimal       @db.Decimal(10, 2)
+  hasInvoice   Boolean       @default(false) @map("has_invoice")
+  observations String?       @db.Text
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  products     ReceiptProduct[]
+  supplier     Supplier?     @relation("ReceiptSupplier", fields: [supplierId], references: [id])
+  client       Client?       @relation("ReceiptClient", fields: [clientId], references: [id])
+
+  @@map("receipts")
+  @@index([date])
+  @@index([type])
+  @@index([supplierId])
+  @@index([clientId])
+}
+
+model ReceiptProduct {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiptId  String   @map("receipt_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  quantity   Decimal  @db.Decimal(10, 3)
+  unitPrice  Decimal  @map("unit_price") @db.Decimal(10, 2)
+  total      Decimal  @db.Decimal(10, 2)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  receipt    Receipt  @relation(fields: [receiptId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+
+  @@map("receipt_products")
+  @@unique([receiptId, productId])
+}
+
+model DailyExpense {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  date          DateTime  @db.Date
+  category      String    @db.VarChar(100)
+  amount        Decimal   @db.Decimal(10, 2)
+  observations  String?   @db.Text
+  supplierId    String?   @map("supplier_id") @db.Uuid
+  supplierName  String?   @map("supplier_name") @db.VarChar(255)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  supplier      Supplier? @relation("DailyExpenseSupplier", fields: [supplierId], references: [id])
+
+  @@map("daily_expenses")
+  @@index([date])
+  @@index([category])
+  @@index([supplierId])
+}
+
+model User {
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                  String                @unique @db.VarChar(255)
+  fullName               String                @map("full_name") @db.VarChar(255)
+  passwordHash           String                @map("password_hash") @db.Text
+  emailVerified          Boolean               @default(false) @map("email_verified")
+  verificationToken      String?               @map("verification_token") @db.Text
+  verificationExpiresAt  DateTime?             @map("verification_expires_at") @db.Timestamptz(6)
+  role                   UserRole
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  assignedOrders         ServiceOrder[]        @relation("ServiceOrderAssignee")
+
+  @@map("users")
+  @@index([role])
+}
+
+model ServiceOrder {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderNumber   String                @unique @map("order_number") @db.VarChar(255)
+  clientId      String?               @map("client_id") @db.Uuid
+  assignedTo    String?               @map("assigned_to") @db.Uuid
+  status        ServiceOrderStatus
+  title         String                @db.Text
+  description   String?               @db.Text
+  priority      ServiceOrderPriority?
+  scheduledDate DateTime?             @map("scheduled_date") @db.Date
+  completedDate DateTime?             @map("completed_date") @db.Date
+  totalValue    Decimal               @default(dbgenerated("0")) @map("total_value") @db.Decimal(10, 2)
+  notes         String?               @db.Text
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  client        Client?               @relation(fields: [clientId], references: [id])
+  assignee      User?                 @relation("ServiceOrderAssignee", fields: [assignedTo], references: [id])
+  items         ServiceOrderItem[]
+
+  @@map("service_orders")
+  @@index([clientId])
+  @@index([assignedTo])
+  @@index([status])
+  @@index([scheduledDate])
+}
+
+model ServiceOrderItem {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceOrderId String        @map("service_order_id") @db.Uuid
+  productId      String?       @map("product_id") @db.Uuid
+  description    String        @db.Text
+  quantity       Decimal       @db.Decimal(10, 2)
+  unitPrice      Decimal       @map("unit_price") @db.Decimal(10, 2)
+  total          Decimal       @db.Decimal(10, 2)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  serviceOrder   ServiceOrder  @relation(fields: [serviceOrderId], references: [id])
+  product        Product?      @relation(fields: [productId], references: [id])
+
+  @@map("service_order_items")
+  @@index([serviceOrderId])
+}
+
+enum ReceiptType {
+  supplier
+  client
+}
+
+enum UserRole {
+  admin
+  technician
+  client
+}
+
+enum ServiceOrderStatus {
+  pending
+  in_progress
+  completed
+  cancelled
+}
+
+enum ServiceOrderPriority {
+  low
+  medium
+  high
+  urgent
+}

@@ -11,15 +11,20 @@ export async function getCurrentUser(): Promise<User | null> {
   if (!authUser) return null
 
   // Fetch user details from users table
-  const { data: userData, error } = await supabase.from("users").select("*").eq("id", authUser.id).single()
+  const { data: userData, error } = await supabase
+    .from("users")
+    .select("id, email, full_name, role, email_verified, created_at, updated_at")
+    .eq("email", authUser.email?.toLowerCase())
+    .single()
 
   if (error || !userData) return null
 
   return {
     id: userData.id,
     email: userData.email,
-    name: userData.name,
+    fullName: userData.full_name,
     role: userData.role,
+    emailVerified: userData.email_verified,
     createdAt: new Date(userData.created_at),
     updatedAt: new Date(userData.updated_at),
   }

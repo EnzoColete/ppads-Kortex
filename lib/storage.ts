@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Supplier,
   Client,
   Product,
@@ -9,6 +9,7 @@ import type {
   Report,
   CalendarEvent,
   ServiceOrder,
+  ServiceOrderItem,
 } from "./types"
 import { supabase } from "./supabase/client"
 import { logger } from "./logger"
@@ -75,7 +76,7 @@ export const supplierStorage = {
 
       if (error) {
         logger.error("Error creating supplier", error)
-        throw new Error("Não foi possível criar o fornecedor. Verifique se o Supabase está configurado.")
+        throw new Error("NÃ£o foi possÃ­vel criar o fornecedor. Verifique se o Supabase estÃ¡ configurado.")
       }
 
       logger.logBusinessEvent("supplier_created", {
@@ -86,7 +87,7 @@ export const supplierStorage = {
       return data
     } catch (error) {
       logger.error("Error creating supplier", error as Error)
-      throw new Error("Erro de conexão com o banco de dados.")
+      throw new Error("Erro de conexÃ£o com o banco de dados.")
     }
   },
 
@@ -168,7 +169,7 @@ export const clientStorage = {
     }
 
     if (existingEmailClient) {
-      throw new Error(`Já existe um cliente cadastrado com este email: ${existingEmailClient.name}`)
+      throw new Error(`JÃ¡ existe um cliente cadastrado com este email: ${existingEmailClient.name}`)
     }
 
     const { data: existingCpfClient, error: cpfCheckError } = await supabase
@@ -183,7 +184,7 @@ export const clientStorage = {
     }
 
     if (existingCpfClient) {
-      throw new Error(`Já existe um cliente cadastrado com este CPF/CNPJ: ${existingCpfClient.name}`)
+      throw new Error(`JÃ¡ existe um cliente cadastrado com este CPF/CNPJ: ${existingCpfClient.name}`)
     }
 
     const dbClient = mapClientToDb(client)
@@ -193,12 +194,12 @@ export const clientStorage = {
       console.error("Error creating client:", error)
       if (error.code === "23505") {
         if (error.message.includes("clients_email_key")) {
-          throw new Error("Já existe um cliente cadastrado com este email")
+          throw new Error("JÃ¡ existe um cliente cadastrado com este email")
         }
         if (error.message.includes("clients_cpf_cnpj_key")) {
-          throw new Error("Já existe um cliente cadastrado com este CPF/CNPJ")
+          throw new Error("JÃ¡ existe um cliente cadastrado com este CPF/CNPJ")
         }
-        throw new Error("Já existe um cliente cadastrado com estes dados")
+        throw new Error("JÃ¡ existe um cliente cadastrado com estes dados")
       }
       throw error
     }
@@ -415,7 +416,7 @@ export const receiptStorage = {
 
     if (receiptError) {
       console.error("Error creating receipt:", receiptError)
-      throw new Error("Não foi possível criar o recibo. Verifique se o Supabase está configurado.")
+      throw new Error("NÃ£o foi possÃ­vel criar o recibo. Verifique se o Supabase estÃ¡ configurado.")
     }
 
     // Criar produtos do recibo se existirem
@@ -549,9 +550,9 @@ export const dailyExpenseStorage = {
   },
 
   create: async (expense: Omit<DailyExpense, "id" | "createdAt">): Promise<DailyExpense> => {
-    // Validação básica
+    // ValidaÃ§Ã£o bÃ¡sica
     if (!expense.date || !expense.category || expense.amount === undefined || expense.amount <= 0) {
-      throw new Error("Dados inválidos: data, categoria e valor são obrigatórios")
+      throw new Error("Dados invÃ¡lidos: data, categoria e valor sÃ£o obrigatÃ³rios")
     }
 
     const dbExpense = {
@@ -570,7 +571,7 @@ export const dailyExpenseStorage = {
     }
 
     if (!data) {
-      throw new Error("Nenhum dado retornado após inserção")
+      throw new Error("Nenhum dado retornado apÃ³s inserÃ§Ã£o")
     }
 
     return {
@@ -667,263 +668,162 @@ export const calendarEventStorage = {
 }
 
 // Service Orders
+const isBrowser = typeof window !== "undefined"
+
+const safeParseJson = async (response: Response) => {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+const resolveApiUrl = (path: string) => {
+  if (isBrowser) return path
+
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.VERCEL_URL ||
+    `http://localhost:${process.env.PORT || 3000}`
+
+  const normalized = base.startsWith("http") ? base : `https://${base}`
+  return new URL(path, normalized).toString()
+}
+
+const deserializeServiceOrderItem = (item: any): ServiceOrderItem => ({
+  id: item.id,
+  serviceOrderId: item.serviceOrderId ?? item.service_order_id,
+  productId: item.productId ?? item.product_id ?? undefined,
+  description: item.description ?? "",
+  quantity: typeof item.quantity === "number" ? item.quantity : Number(item.quantity ?? 0),
+  unitPrice: typeof item.unitPrice === "number" ? item.unitPrice : Number(item.unit_price ?? 0),
+  total: typeof item.total === "number" ? item.total : Number(item.total ?? 0),
+  createdAt: new Date(item.createdAt ?? item.created_at),
+})
+
+const deserializeServiceOrder = (order: any): ServiceOrder => ({
+  id: order.id,
+  orderNumber: order.orderNumber ?? order.order_number,
+  clientId: order.clientId ?? order.client_id,
+  assignedTo: order.assignedTo ?? order.assigned_to ?? undefined,
+  status: order.status,
+  title: order.title,
+  description: order.description ?? "",
+  priority: order.priority ?? undefined,
+  scheduledDate: order.scheduledDate ?? order.scheduled_date ?? undefined,
+  completedDate: order.completedDate ?? order.completed_date ?? undefined,
+  totalValue: typeof order.totalValue === "number" ? order.totalValue : Number(order.total_value ?? 0),
+  notes: order.notes ?? undefined,
+  items: Array.isArray(order.items) ? order.items.map(deserializeServiceOrderItem) : [],
+  createdAt: new Date(order.createdAt ?? order.created_at),
+  updatedAt: new Date(order.updatedAt ?? order.updated_at),
+})
+
 export const serviceOrderStorage = {
   getAll: async (): Promise<ServiceOrder[]> => {
-    const startTime = Date.now()
     try {
-      const { data: ordersData, error: ordersError } = await supabase
-        .from("service_orders")
-        .select("*")
-        .order("created_at", { ascending: false })
-
-      logger.logDatabaseQuery("SELECT", "service_orders", Date.now() - startTime, {
-        count: ordersData?.length || 0,
+      const response = await fetch(resolveApiUrl("/api/service-orders"), {
+        headers: { Accept: "application/json" },
       })
 
-      if (ordersError) {
-        logger.error("Error fetching service orders", ordersError)
+      if (response.status === 403 || response.status === 401) {
+        console.warn("Sem permissão para listar ordens de serviço; retornando lista vazia.")
         return []
       }
 
-      if (!ordersData || ordersData.length === 0) {
-        return []
+      if (!response.ok) {
+        const payload = await safeParseJson(response)
+        const message =
+          typeof payload?.error === "string" && payload.error.length > 0
+            ? payload.error
+            : "Erro ao carregar ordens de servico."
+        throw new Error(message)
       }
 
-      const ordersWithItems = await Promise.all(
-        ordersData.map(async (order) => {
-          const { data: items } = await supabase
-            .from("service_order_items")
-            .select("*")
-            .eq("service_order_id", order.id)
-
-          return {
-            id: order.id,
-            orderNumber: order.order_number,
-            clientId: order.client_id,
-            assignedTo: order.assigned_to,
-            status: order.status,
-            title: order.title,
-            description: order.description,
-            priority: order.priority,
-            scheduledDate: order.scheduled_date,
-            completedDate: order.completed_date,
-            totalValue: order.total_value,
-            notes: order.notes,
-            items: (items || []).map((item: any) => ({
-              id: item.id,
-              serviceOrderId: item.service_order_id,
-              productId: item.product_id,
-              description: item.description,
-              quantity: item.quantity,
-              unitPrice: item.unit_price,
-              total: item.total,
-              createdAt: new Date(item.created_at),
-            })),
-            createdAt: new Date(order.created_at),
-            updatedAt: new Date(order.updated_at),
-          }
-        }),
-      )
-
-      return ordersWithItems
+      const payload = (await response.json()) as any[]
+      return payload.map(deserializeServiceOrder)
     } catch (error) {
-      logger.error("Error connecting to database", error as Error, { table: "service_orders" })
+      console.error("Falha ao carregar ordens de serviço:", error)
       return []
     }
   },
 
   getById: async (id: string): Promise<ServiceOrder | undefined> => {
-    const startTime = Date.now()
-    const { data: order, error } = await supabase.from("service_orders").select("*").eq("id", id).single()
-
-    logger.logDatabaseQuery("SELECT", "service_orders", Date.now() - startTime, { id })
-
-    if (error) {
-      logger.error("Error fetching service order", error, { id })
+    const response = await fetch(resolveApiUrl(`/api/service-orders/${id}`), {
+      headers: { Accept: "application/json" },
+    })
+    if (response.status === 404) return undefined
+    if (response.status === 403 || response.status === 401) {
+      console.warn("Sem permissão para acessar esta ordem de serviço; retornando indefinido.")
       return undefined
     }
-
-    const { data: items } = await supabase.from("service_order_items").select("*").eq("service_order_id", id)
-
-    return {
-      id: order.id,
-      orderNumber: order.order_number,
-      clientId: order.client_id,
-      assignedTo: order.assigned_to,
-      status: order.status,
-      title: order.title,
-      description: order.description,
-      priority: order.priority,
-      scheduledDate: order.scheduled_date,
-      completedDate: order.completed_date,
-      totalValue: order.total_value,
-      notes: order.notes,
-      items: (items || []).map((item: any) => ({
-        id: item.id,
-        serviceOrderId: item.service_order_id,
-        productId: item.product_id,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unit_price,
-        total: item.total,
-        createdAt: new Date(item.created_at),
-      })),
-      createdAt: new Date(order.created_at),
-      updatedAt: new Date(order.updated_at),
+    if (!response.ok) {
+      throw new Error("Erro ao carregar ordem de servico.")
     }
+    const payload = await response.json()
+    return deserializeServiceOrder(payload)
   },
 
   create: async (order: Omit<ServiceOrder, "id" | "createdAt" | "updatedAt">): Promise<ServiceOrder> => {
-    const startTime = Date.now()
-    const { items, ...orderData } = order
-
-    const dbOrderData = {
-      order_number: orderData.orderNumber,
-      client_id: orderData.clientId,
-      assigned_to: orderData.assignedTo,
-      status: orderData.status,
-      title: orderData.title,
-      description: orderData.description,
-      priority: orderData.priority,
-      scheduled_date: orderData.scheduledDate,
-      completed_date: orderData.completedDate,
-      total_value: orderData.totalValue,
-      notes: orderData.notes,
-    }
-
-    const { data: orderResult, error: orderError } = await supabase
-      .from("service_orders")
-      .insert([dbOrderData])
-      .select()
-      .single()
-
-    logger.logDatabaseQuery("INSERT", "service_orders", Date.now() - startTime)
-
-    if (orderError) {
-      logger.error("Error creating service order", orderError)
-      throw new Error("Não foi possível criar a ordem de serviço.")
-    }
-
-    if (items && items.length > 0) {
-      const orderItems = items.map((item) => ({
-        service_order_id: orderResult.id,
-        product_id: item.productId,
-        description: item.description,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        total: item.total,
-      }))
-
-      const { error: itemsError } = await supabase.from("service_order_items").insert(orderItems)
-
-      if (itemsError) {
-        logger.error("Error creating service order items", itemsError)
-        await supabase.from("service_orders").delete().eq("id", orderResult.id)
-        throw new Error("Erro ao criar itens da ordem de serviço.")
-      }
-    }
-
-    logger.logBusinessEvent("service_order_created", {
-      orderId: orderResult.id,
-      orderNumber: orderResult.order_number,
-      clientId: orderResult.client_id,
-      totalValue: orderResult.total_value,
+    const response = await fetch(resolveApiUrl("/api/service-orders"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(order),
     })
 
-    return {
-      id: orderResult.id,
-      orderNumber: orderResult.order_number,
-      clientId: orderResult.client_id,
-      assignedTo: orderResult.assigned_to,
-      status: orderResult.status,
-      title: orderResult.title,
-      description: orderResult.description,
-      priority: orderResult.priority,
-      scheduledDate: orderResult.scheduled_date,
-      completedDate: orderResult.completed_date,
-      totalValue: orderResult.total_value,
-      notes: orderResult.notes,
-      items: items || [],
-      createdAt: new Date(orderResult.created_at),
-      updatedAt: new Date(orderResult.updated_at),
+    try {
+      const response = await fetch(resolveApiUrl("/api/service-orders"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(order),
+      })
+
+      if (!response.ok) {
+        const payload = await safeParseJson(response)
+        throw new Error(payload?.error ?? "Erro ao criar ordem de servico.")
+      }
+
+      const payload = await response.json()
+      return deserializeServiceOrder(payload)
+    } catch (error) {
+      console.error("Falha ao criar ordem de serviço:", error)
+      throw error instanceof Error ? error : new Error("Erro ao criar ordem de servico.")
     }
   },
 
   update: async (id: string, updates: Partial<ServiceOrder>): Promise<ServiceOrder | null> => {
-    const startTime = Date.now()
-    const dbUpdates: any = {}
-
-    if (updates.status) dbUpdates.status = updates.status
-    if (updates.assignedTo !== undefined) dbUpdates.assigned_to = updates.assignedTo
-    if (updates.title) dbUpdates.title = updates.title
-    if (updates.description !== undefined) dbUpdates.description = updates.description
-    if (updates.priority !== undefined) dbUpdates.priority = updates.priority
-    if (updates.scheduledDate !== undefined) dbUpdates.scheduled_date = updates.scheduledDate
-    if (updates.completedDate !== undefined) dbUpdates.completed_date = updates.completedDate
-    if (updates.totalValue !== undefined) dbUpdates.total_value = updates.totalValue
-    if (updates.notes !== undefined) dbUpdates.notes = updates.notes
-
-    const { data, error } = await supabase.from("service_orders").update(dbUpdates).eq("id", id).select().single()
-
-    logger.logDatabaseQuery("UPDATE", "service_orders", Date.now() - startTime, { id })
-
-    if (error) {
-      logger.error("Error updating service order", error, { id })
-      return null
-    }
-
-    logger.logBusinessEvent("service_order_updated", {
-      orderId: id,
-      changes: Object.keys(updates),
+    const response = await fetch(resolveApiUrl(`/api/service-orders/${id}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(updates),
     })
 
-    const { data: items } = await supabase.from("service_order_items").select("*").eq("service_order_id", id)
-
-    return {
-      id: data.id,
-      orderNumber: data.order_number,
-      clientId: data.client_id,
-      assignedTo: data.assigned_to,
-      status: data.status,
-      title: data.title,
-      description: data.description,
-      priority: data.priority,
-      scheduledDate: data.scheduled_date,
-      completedDate: data.completed_date,
-      totalValue: data.total_value,
-      notes: data.notes,
-      items: (items || []).map((item: any) => ({
-        id: item.id,
-        serviceOrderId: item.service_order_id,
-        productId: item.product_id,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unit_price,
-        total: item.total,
-        createdAt: new Date(item.created_at),
-      })),
-      createdAt: new Date(data.created_at),
-      updatedAt: new Date(data.updated_at),
+    if (response.status === 404) return null
+    if (!response.ok) {
+      const payload = await safeParseJson(response)
+      throw new Error(payload?.error ?? "Erro ao atualizar ordem de servico.")
     }
+
+    const payload = await response.json()
+    return deserializeServiceOrder(payload)
   },
 
   delete: async (id: string): Promise<boolean> => {
-    const startTime = Date.now()
-    const { error } = await supabase.from("service_orders").delete().eq("id", id)
+    const response = await fetch(resolveApiUrl(`/api/service-orders/${id}`), {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+    })
 
-    logger.logDatabaseQuery("DELETE", "service_orders", Date.now() - startTime, { id })
-
-    if (error) {
-      logger.error("Error deleting service order", error, { id })
-      return false
+    if (response.status === 404) return false
+    if (!response.ok) {
+      const payload = await safeParseJson(response)
+      throw new Error(payload?.error ?? "Erro ao excluir ordem de servico.")
     }
-
-    logger.logBusinessEvent("service_order_deleted", { orderId: id })
 
     return true
   },
 }
-
 export const getSuppliers = async (): Promise<Supplier[]> => await supplierStorage.getAll()
 export const getClients = async (): Promise<Client[]> => await clientStorage.getAll()
 export const getProducts = async (): Promise<Product[]> => await productStorage.getAll()
@@ -1081,3 +981,14 @@ const mapReceiptFromDb = (receipt: any) => {
     ...(has_invoice !== undefined && { hasInvoice: has_invoice }),
   }
 }
+
+
+
+
+
+
+
+
+
+
+

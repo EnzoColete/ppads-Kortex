@@ -1,8 +1,7 @@
-"use client"
-
-import type React from "react"
+﻿"use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,23 +18,23 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault()
     setIsLoading(true)
     setError(null)
 
     try {
+      const sanitizedEmail = email.trim().toLowerCase()
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: sanitizedEmail,
         password,
       })
 
       if (error) throw error
 
       router.push("/")
-      router.refresh()
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Erro ao fazer login")
+    } catch (loginError: unknown) {
+      setError(loginError instanceof Error ? loginError.message : "Erro ao fazer login")
     } finally {
       setIsLoading(false)
     }
@@ -45,7 +44,6 @@ export default function LoginPage() {
     <div className="flex min-h-screen w-full items-center justify-center p-6 bg-gradient-to-br from-blue-50 to-gray-100">
       <div className="w-full max-w-md">
         <div className="flex flex-col gap-6">
-          {/* Logo */}
           <div className="flex justify-center mb-4">
             <Image src="/kortex-logo.png" alt="Kortex Logo" width={200} height={80} priority />
           </div>
@@ -66,7 +64,7 @@ export default function LoginPage() {
                       placeholder="seu@email.com"
                       required
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(event) => setEmail(event.target.value)}
                       disabled={isLoading}
                     />
                   </div>
@@ -77,7 +75,7 @@ export default function LoginPage() {
                       type="password"
                       required
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(event) => setPassword(event.target.value)}
                       disabled={isLoading}
                     />
                   </div>
@@ -89,6 +87,13 @@ export default function LoginPage() {
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Entrando..." : "Entrar"}
                   </Button>
+                  <p className="text-sm text-center text-gray-600">
+                    Nao possui conta? {" "}
+                    <Link href="/auth/register" className="text-blue-600 hover:underline">
+                      Cadastre-se
+                    </Link>
+                    .
+                  </p>
                 </div>
               </form>
             </CardContent>

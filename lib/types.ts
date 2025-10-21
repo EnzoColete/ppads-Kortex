@@ -45,7 +45,7 @@ export interface Receipt {
   date: string
   products: ReceiptProduct[]
   total: number
-  hasInvoice?: boolean // Para recibos de cliente
+  hasInvoice?: boolean
   observations?: string
   createdAt: Date
   updatedAt: Date
@@ -56,24 +56,6 @@ export interface ReceiptProduct {
   quantity: number
   unitPrice: number
   total: number
-}
-
-export interface Alert {
-  id: string
-  clientId: string
-  type: "30days" | "40days" | "50days" | "60days"
-  message: string
-  isRead: boolean
-  createdAt: Date
-}
-
-export interface Report {
-  id: string
-  type: "daily" | "weekly" | "monthly" | "custom"
-  startDate: Date
-  endDate: Date
-  data: any
-  createdAt: Date
 }
 
 export interface DailyExpense {
@@ -87,24 +69,12 @@ export interface DailyExpense {
   createdAt?: string
 }
 
-export interface CalendarEvent {
-  id: string
-  date: string
-  type: "fuel" | "expense" | "receipt"
-  title: string
-  description?: string
-  value?: number
-  supplier?: string
-  client?: string
-  daysSince?: number
-  alertLevel?: "green" | "yellow" | "orange" | "red"
-}
-
 export interface User {
   id: string
   email: string
-  name: string
+  fullName: string
   role: "admin" | "technician" | "client"
+  emailVerified: boolean
   createdAt: Date
   updatedAt: Date
 }
