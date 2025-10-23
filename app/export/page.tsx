@@ -61,7 +61,7 @@ export default function ExportPage() {
               { header: "Email", key: "email", width: 30 },
               { header: "Telefone", key: "phone", width: 20 },
               { header: "CNPJ", key: "cnpj", width: 20 },
-              { header: "Endereço", key: "address", width: 40 },
+              { header: "Endereï¿½o", key: "address", width: 40 },
               { header: "Data Cadastro", key: "createdAt", width: 15 },
             ],
             data: suppliers.map((s) => ({
@@ -84,7 +84,7 @@ export default function ExportPage() {
               { header: "Email", key: "email", width: 30 },
               { header: "Telefone", key: "phone", width: 20 },
               { header: "CPF/CNPJ", key: "cpfCnpj", width: 20 },
-              { header: "Endereço", key: "address", width: 40 },
+              { header: "Endereï¿½o", key: "address", width: 40 },
               { header: "Data Cadastro", key: "createdAt", width: 15 },
             ],
             data: clients.map((c) => ({
@@ -104,8 +104,8 @@ export default function ExportPage() {
             sheetName: "Produtos",
             columns: [
               { header: "Nome", key: "name", width: 30 },
-              { header: "Descrição", key: "description", width: 40 },
-              { header: "Preço", key: "price", width: 15 },
+              { header: "Descriï¿½ï¿½o", key: "description", width: 40 },
+              { header: "Preï¿½o", key: "price", width: 15 },
               { header: "Unidade", key: "unit", width: 15 },
               { header: "Tipo", key: "type", width: 20 },
               { header: "Data Cadastro", key: "createdAt", width: 15 },
@@ -143,7 +143,7 @@ export default function ExportPage() {
           break
       }
 
-      alert("Exportação concluída com sucesso!")
+      alert("Exportaï¿½ï¿½o concluï¿½da com sucesso!")
     } catch (error) {
       console.error("Erro ao exportar:", error)
       alert("Erro ao exportar dados. Tente novamente.")
@@ -229,7 +229,7 @@ export default function ExportPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Configurações de Exportação</CardTitle>
+          <CardTitle>Configuraï¿½ï¿½es de Exportaï¿½ï¿½o</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
@@ -248,12 +248,12 @@ export default function ExportPage() {
           </div>
 
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <h3 className="font-medium text-blue-900 mb-2">Resumo da Exportação:</h3>
+            <h3 className="font-medium text-blue-900 mb-2">Resumo da Exportaï¿½ï¿½o:</h3>
             <p className="text-sm text-blue-800">
-              Será exportado: <strong>{getDataCount()} registro(s)</strong> em formato <strong>Excel (.csv)</strong>
+              Serï¿½ exportado: <strong>{getDataCount()} registro(s)</strong> em formato <strong>Excel (.csv)</strong>
             </p>
             <p className="text-xs text-blue-600 mt-2">
-              O arquivo será compatível com Microsoft Excel, Google Sheets e LibreOffice Calc
+              O arquivo serï¿½ compatï¿½vel com Microsoft Excel, Google Sheets e LibreOffice Calc
             </p>
           </div>
 
