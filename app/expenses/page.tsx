@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import type React from "react"
 import { useState, useEffect } from "react"
@@ -13,7 +13,7 @@ import type { DailyExpense, Supplier } from "@/lib/types"
 import { getSuppliers, getDailyExpenses, saveDailyExpense, deleteDailyExpense } from "@/lib/storage"
 import { ExpenseReportView } from "@/components/expense-report-view"
 
-const DEFAULT_CATEGORIES = ["Alimentação", "Combustível", "Pedágio", "Fornecedor", "Manutenção", "Hospedagem"]
+const DEFAULT_CATEGORIES = ["Alimentação", "Combustível", "Pedágio", "Fornecedor"]
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<DailyExpense[]>([])
@@ -37,10 +37,18 @@ export default function ExpensesPage() {
     notes: "",
   })
 
+  // Auxiliar tradicional para moeda
+  const formatBRL = (n: number) =>
+    n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 })
+
   useEffect(() => {
-    const savedCategories = localStorage.getItem("expenseCategories")
+    const savedCategories = typeof window !== "undefined" ? localStorage.getItem("expenseCategories") : null
     if (savedCategories) {
-      setCategories(JSON.parse(savedCategories))
+      try {
+        setCategories(JSON.parse(savedCategories))
+      } catch {
+        // se der erro, mantém as categorias padrão
+      }
     }
   }, [])
 
@@ -63,10 +71,13 @@ export default function ExpensesPage() {
   }, [])
 
   const handleAddCategory = () => {
-    if (newCategory.trim() && !categories.includes(newCategory.trim())) {
-      const updatedCategories = [...categories, newCategory.trim()]
-      setCategories(updatedCategories)
-      localStorage.setItem("expenseCategories", JSON.stringify(updatedCategories))
+    const value = newCategory.trim()
+    if (value && !categories.includes(value)) {
+      const updated = [...categories, value]
+      setCategories(updated)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("expenseCategories", JSON.stringify(updated))
+      }
       setNewCategory("")
     }
   }
@@ -76,9 +87,11 @@ export default function ExpensesPage() {
       alert("Não é possível remover categorias padrão")
       return
     }
-    const updatedCategories = categories.filter((c) => c !== category)
-    setCategories(updatedCategories)
-    localStorage.setItem("expenseCategories", JSON.stringify(updatedCategories))
+    const updated = categories.filter((c) => c !== category)
+    setCategories(updated)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("expenseCategories", JSON.stringify(updated))
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -90,7 +103,9 @@ export default function ExpensesPage() {
     }
 
     try {
-      const selectedSupplier = formData.supplierName ? suppliers.find((s) => s.name === formData.supplierName) : null
+      const selectedSupplier = formData.supplierName
+        ? suppliers.find((s) => s.name === formData.supplierName)
+        : null
 
       const expense: Omit<DailyExpense, "id" | "createdAt"> = {
         date: formData.date,
@@ -140,10 +155,12 @@ export default function ExpensesPage() {
     const todayStr = today.toISOString().split("T")[0]
 
     switch (filterType) {
-      case "today":
+      case "today": {
         return { start: todayStr, end: todayStr }
-      case "week":
+      }
+      case "week": {
         const weekStart = new Date(today)
+        // domingo como início da semana: tradição simples
         weekStart.setDate(today.getDate() - today.getDay())
         const weekEnd = new Date(weekStart)
         weekEnd.setDate(weekStart.getDate() + 6)
@@ -151,13 +168,15 @@ export default function ExpensesPage() {
           start: weekStart.toISOString().split("T")[0],
           end: weekEnd.toISOString().split("T")[0],
         }
-      case "month":
+      }
+      case "month": {
         const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
         const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0)
         return {
           start: monthStart.toISOString().split("T")[0],
           end: monthEnd.toISOString().split("T")[0],
         }
+      }
       case "custom":
         return { start: startDate, end: endDate }
       default:
@@ -202,8 +221,11 @@ export default function ExpensesPage() {
     )
   }
 
+  const dateRange = getDateRange()
+
   return (
     <div className="p-6">
+      {/* Cabeçalho */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Gastos Diários</h1>
@@ -225,77 +247,58 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-600">R$ {totalExpenses.toFixed(2)}</div>
-            <p className="text-sm text-gray-600">Total do Período</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-600">{filteredExpenses.length}</div>
-            <p className="text-sm text-gray-600">Registros</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-orange-600">
-              R$ {filteredExpenses.length > 0 ? (totalExpenses / filteredExpenses.length).toFixed(2) : "0.00"}
-            </div>
-            <p className="text-sm text-gray-600">Média por Registro</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-purple-600">{Object.keys(expensesByCategory).length}</div>
-            <p className="text-sm text-gray-600">Categorias Usadas</p>
-          </CardContent>
-        </Card>
-      </div>
-
+      {/* Filtros simples */}
       <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Filtros
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <Label htmlFor="search">Buscar</Label>
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row gap-3 items-start md:items-end">
+            <div className="flex-1">
+              <Label htmlFor="search">Busca</Label>
               <Input
                 id="search"
-                placeholder="Categoria, fornecedor ou observações..."
+                placeholder="Categoria, fornecedor ou observações"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div>
-              <Label htmlFor="period">Período</Label>
-              <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+
+            <div className="w-full md:w-56">
+              <Label>Período</Label>
+              <Select
+                value={filterType}
+                onValueChange={(v) => setFilterType(v as typeof filterType)}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o período" />
+                  <SelectValue placeholder="Período" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os registros</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="today">Hoje</SelectItem>
                   <SelectItem value="week">Esta semana</SelectItem>
                   <SelectItem value="month">Este mês</SelectItem>
-                  <SelectItem value="custom">Período personalizado</SelectItem>
+                  <SelectItem value="custom">Personalizado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
             {filterType === "custom" && (
               <>
                 <div>
-                  <Label htmlFor="startDate">Data Inicial</Label>
-                  <Input id="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  <Label htmlFor="startDate">Início</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
                 </div>
                 <div>
-                  <Label htmlFor="endDate">Data Final</Label>
-                  <Input id="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  <Label htmlFor="endDate">Fim</Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
                 </div>
               </>
             )}
@@ -303,142 +306,38 @@ export default function ExpensesPage() {
         </CardContent>
       </Card>
 
-      {showCategoryManager && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Gerenciar Categorias</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => setShowCategoryManager(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Nova categoria..."
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && handleAddCategory()}
-                />
-                <Button onClick={handleAddCategory}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {categories.map((category) => (
-                  <div key={category} className="flex items-center justify-between p-2 border rounded">
-                    <span>{category}</span>
-                    {!DEFAULT_CATEGORIES.includes(category) && (
-                      <Button variant="ghost" size="sm" onClick={() => handleRemoveCategory(category)}>
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {isFormOpen && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Novo Registro de Gasto</CardTitle>
-            <CardDescription>Preencha os dados do gasto</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="date">Data *</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="category">Categoria *</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) => setFormData({ ...formData, category: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione uma categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="amount">Valor (R$) *</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="supplierName">Fornecedor (Opcional)</Label>
-                  <Select
-                    value={formData.supplierName}
-                    onValueChange={(value) => setFormData({ ...formData, supplierName: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um fornecedor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.name}>
-                          {supplier.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="notes">Observações</Label>
-                <Textarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Observações adicionais..."
-                  rows={3}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit">Salvar Gasto</Button>
-                <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
+      {/* Estatísticas resumidas, sem firulas */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-gray-900">{formatBRL(totalExpenses)}</div>
+            <p className="text-sm text-gray-600">Total no período</p>
           </CardContent>
         </Card>
-      )}
 
-      {showReport && (
-        <ExpenseReportView
-          expenses={filteredExpenses}
-          startDate={getDateRange().start}
-          endDate={getDateRange().end}
-          onClose={() => setShowReport(false)}
-        />
-      )}
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-orange-600">
+              {filteredExpenses.length > 0
+                ? formatBRL(totalExpenses / filteredExpenses.length)
+                : formatBRL(0)}
+            </div>
+            <p className="text-sm text-gray-600">Média por registro</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-purple-600">
+              {Object.keys(expensesByCategory).length}
+            </div>
+            <p className="text-sm text-gray-600">Categorias usadas</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Lista de registros */}
+      <p className="text-sm text-gray-600 mb-2">Registros</p>
 
       <div className="space-y-4">
         {filteredExpenses.length === 0 ? (
@@ -456,13 +355,19 @@ export default function ExpensesPage() {
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-2">
-                      <span className="font-semibold">{new Date(expense.date).toLocaleDateString("pt-BR")}</span>
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">{expense.category}</span>
+                      <span className="font-semibold">
+                        {new Date(expense.date).toLocaleDateString("pt-BR")}
+                      </span>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                        {expense.category}
+                      </span>
                     </div>
                     <div className="text-sm space-y-1">
                       <div>
                         <span className="text-gray-600">Valor:</span>
-                        <span className="ml-2 font-bold text-lg">R$ {expense.amount.toFixed(2)}</span>
+                        <span className="ml-2 font-bold text-lg">
+                          {formatBRL(expense.amount)}
+                        </span>
                       </div>
                       {expense.supplierName && (
                         <div>
@@ -492,6 +397,166 @@ export default function ExpensesPage() {
           ))
         )}
       </div>
+
+      {/* Formulário de novo gasto (simples e direto) */}
+      {isFormOpen && (
+        <Card className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <Card className="w-full max-w-xl">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Novo Gasto</CardTitle>
+                <CardDescription>Cadastre um novo lançamento</CardDescription>
+              </div>
+              <Button variant="ghost" onClick={() => setIsFormOpen(false)} aria-label="Fechar">
+                <X className="h-5 w-5" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="date">Data</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Categoria</Label>
+                    <Select
+                      value={formData.category}
+                      onValueChange={(v) => setFormData({ ...formData, category: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="amount">Valor</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      value={formData.amount}
+                      onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Fornecedor</Label>
+                    <Select
+                      value={formData.supplierName}
+                      onValueChange={(v) => setFormData({ ...formData, supplierName: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Opcional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map((s) => (
+                          <SelectItem key={s.id} value={s.name}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="notes">Observações</Label>
+                  <Textarea
+                    id="notes"
+                    value={formData.notes ?? ""}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Observações adicionais..."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                  <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit">Salvar Gasto</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </Card>
+      )}
+
+      {/* Gerenciador de categorias (simples) */}
+      {showCategoryManager && (
+        <Card className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <Card className="w-full max-w-lg">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Categorias</CardTitle>
+              <Button variant="ghost" onClick={() => setShowCategoryManager(false)} aria-label="Fechar">
+                <X className="h-5 w-5" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nova categoria"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      handleAddCategory()
+                    }
+                  }}
+                />
+                <Button onClick={handleAddCategory}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar
+                </Button>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-auto">
+                {categories.map((cat) => (
+                  <div key={cat} className="flex items-center justify-between border rounded px-3 py-2">
+                    <span>{cat}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRemoveCategory(cat)}
+                      disabled={DEFAULT_CATEGORIES.includes(cat)}
+                    >
+                      Remover
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </Card>
+      )}
+
+      {/* Relatório */}
+      {showReport && (
+        <ExpenseReportView
+          expenses={filteredExpenses}
+          startDate={dateRange.start}
+          endDate={dateRange.end}
+          onClose={() => setShowReport(false)}
+        />
+      )}
     </div>
   )
 }

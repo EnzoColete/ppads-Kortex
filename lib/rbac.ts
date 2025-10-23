@@ -47,6 +47,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     { resource: "service_orders", action: "create" },
     { resource: "service_orders", action: "read" },
     { resource: "service_orders", action: "update" },
+    { resource: "service_orders", action: "delete" },
     { resource: "clients", action: "read" },
     { resource: "products", action: "read" },
     { resource: "receipts", action: "create" },
@@ -59,6 +60,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     // Clients can only view their own service orders
     { resource: "service_orders", action: "create" },
     { resource: "service_orders", action: "read" },
+    { resource: "service_orders", action: "delete" },
     { resource: "receipts", action: "read" },
   ],
 }

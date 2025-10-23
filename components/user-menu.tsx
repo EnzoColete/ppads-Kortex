@@ -12,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { User, LogOut } from "lucide-react"
-import { supabase } from "@/lib/supabase/client"
 
 export function UserMenu() {
   const router = useRouter()
@@ -20,20 +19,30 @@ export function UserMenu() {
 
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (user) {
-        setUserEmail(user.email || "")
+      try {
+        const response = await fetch("/api/auth/me")
+        const payload = await response.json().catch(() => ({ user: null }))
+        const user = payload?.user
+        if (user?.email) {
+          setUserEmail(user.email)
+        }
+      } catch (error) {
+        console.error("Failed to load user info:", error)
       }
     }
-    getUser()
+
+    void getUser()
   }, [])
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push("/auth/login")
-    router.refresh()
+    try {
+      await fetch("/api/auth/logout", { method: "POST" })
+    } catch (error) {
+      console.error("Failed to sign out:", error)
+    } finally {
+      router.push("/auth/login")
+      router.refresh()
+    }
   }
 
   return (

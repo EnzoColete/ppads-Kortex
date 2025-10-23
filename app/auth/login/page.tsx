@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState } from "react"
 import Link from "next/link"
@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { supabase } from "@/lib/supabase/client"
 import Image from "next/image"
 
 export default function LoginPage() {
@@ -25,14 +24,23 @@ export default function LoginPage() {
 
     try {
       const sanitizedEmail = email.trim().toLowerCase()
-      const { error } = await supabase.auth.signInWithPassword({
-        email: sanitizedEmail,
-        password,
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: sanitizedEmail, password }),
       })
 
-      if (error) throw error
+      const payload = await response.json().catch(() => ({ message: "" }))
+
+      if (!response.ok) {
+        const message = typeof payload?.message === "string" && payload.message.length > 0
+          ? payload.message
+          : "Erro ao fazer login"
+        throw new Error(message)
+      }
 
       router.push("/")
+      router.refresh()
     } catch (loginError: unknown) {
       setError(loginError instanceof Error ? loginError.message : "Erro ao fazer login")
     } finally {

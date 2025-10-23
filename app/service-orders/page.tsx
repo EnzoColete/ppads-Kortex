@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Search, Eye, Edit, Trash2 } from "lucide-react"
 import { serviceOrderStorage, clientStorage, productStorage } from "@/lib/storage"
+import { ErrorDialog, type ErrorDialogState } from "@/components/error-dialog"
 import type { ServiceOrder, Client, Product } from "@/lib/types"
 import { ServiceOrderForm } from "@/components/service-order-form"
 import { ServiceOrderView } from "@/components/service-order-view"
@@ -22,6 +23,7 @@ export default function ServiceOrdersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingOrder, setEditingOrder] = useState<ServiceOrder | null>(null)
   const [viewingOrder, setViewingOrder] = useState<ServiceOrder | null>(null)
+  const [errorDialog, setErrorDialog] = useState<ErrorDialogState | null>(null)
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
@@ -42,6 +44,11 @@ export default function ServiceOrdersPage() {
       setProducts(productsData)
     } catch (error) {
       console.error("Error loading data:", error)
+      if (error instanceof Error) {
+        setErrorDialog({ title: "Erro ao carregar dados", message: error.message })
+      } else {
+        setErrorDialog({ title: "Erro ao carregar dados", message: "Nao foi possivel carregar as informacoes." })
+      }
     } finally {
       setLoading(false)
     }
@@ -49,7 +56,7 @@ export default function ServiceOrdersPage() {
 
   const getClientName = (clientId: string) => {
     const client = clients.find((c) => c.id === clientId)
-    return client?.name || "Cliente não encontrado"
+    return client?.name || "Cliente nao encontrado"
   }
 
   const filteredOrders = orders.filter((order) => {
@@ -77,7 +84,7 @@ export default function ServiceOrdersPage() {
       setEditingOrder(null)
     } catch (error) {
       console.error("Error creating order:", error)
-      const message = error instanceof Error ? error.message : "Erro ao criar ordem de serviço"
+      const message = error instanceof Error ? error.message : "Erro ao criar ordem de servico"
       alert(message)
     }
   }
@@ -94,18 +101,18 @@ export default function ServiceOrdersPage() {
       }
     } catch (error) {
       console.error("Error updating order:", error)
-      alert("Erro ao atualizar ordem de serviço")
+      alert("Erro ao atualizar ordem de servico")
     }
   }
 
   const handleDeleteOrder = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta ordem de serviço?")) {
+    if (confirm("Tem certeza que deseja excluir esta ordem de servico?")) {
       try {
         await serviceOrderStorage.delete(id)
         setOrders(orders.filter((o) => o.id !== id))
       } catch (error) {
         console.error("Error deleting order:", error)
-        alert("Erro ao excluir ordem de serviço")
+        alert("Erro ao excluir ordem de servico")
       }
     }
   }
@@ -120,7 +127,7 @@ export default function ServiceOrdersPage() {
     const labels: Record<string, string> = {
       pending: "Pendente",
       in_progress: "Em Andamento",
-      completed: "Concluída",
+      completed: "Concluidas",
       cancelled: "Cancelada",
     }
     return <Badge variant={variants[status] || "default"}>{labels[status] || status}</Badge>
@@ -136,7 +143,7 @@ export default function ServiceOrdersPage() {
     }
     const labels: Record<string, string> = {
       low: "Baixa",
-      medium: "Média",
+      medium: "Media",
       high: "Alta",
       urgent: "Urgente",
     }
@@ -144,15 +151,23 @@ export default function ServiceOrdersPage() {
   }
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64">Carregando ordens de serviço...</div>
+    return <div className="flex justify-center items-center h-64">Carregando ordens de servico...</div>
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <ErrorDialog
+        open={Boolean(errorDialog)}
+        onClose={() => setErrorDialog(null)}
+        title={errorDialog?.title}
+        message={errorDialog?.message || ""}
+        details={errorDialog?.details}
+      />
+      <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Ordens de Serviço</h1>
-          <p className="text-gray-600 mt-2">Gerencie as ordens de serviço do sistema</p>
+          <h1 className="text-3xl font-bold text-gray-900">Ordens de servico</h1>
+          <p className="text-gray-600 mt-2">Gerencie as ordens de servico do sistema</p>
         </div>
         <Button
           onClick={() => {
@@ -166,9 +181,9 @@ export default function ServiceOrdersPage() {
         </Button>
       </div>
 
-      {/* Estatísticas */}
+      {/* EstatAsticas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card >
           <CardContent className="pt-6">
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">
@@ -179,7 +194,7 @@ export default function ServiceOrdersPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card >
           <CardContent className="pt-6">
             <div className="text-center">
               <div className="text-2xl font-bold text-yellow-600">
@@ -190,7 +205,7 @@ export default function ServiceOrdersPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card >
           <CardContent className="pt-6">
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">
@@ -201,7 +216,7 @@ export default function ServiceOrdersPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card >
           <CardContent className="pt-6">
             <div className="text-center">
               <div className="text-2xl font-bold text-gray-600">{orders.length}</div>
@@ -212,13 +227,13 @@ export default function ServiceOrdersPage() {
       </div>
 
       {/* Filtros */}
-      <Card>
+      <Card >
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="Buscar por cliente, número ou título..."
+                placeholder="Buscar por cliente, nAomero ou tAtulo..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -233,7 +248,7 @@ export default function ServiceOrdersPage() {
                 <SelectItem value="all">Todos os Status</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
                 <SelectItem value="in_progress">Em Andamento</SelectItem>
-                <SelectItem value="completed">Concluída</SelectItem>
+                <SelectItem value="completed">ConcluAda</SelectItem>
                 <SelectItem value="cancelled">Cancelada</SelectItem>
               </SelectContent>
             </Select>
@@ -245,7 +260,7 @@ export default function ServiceOrdersPage() {
               <SelectContent>
                 <SelectItem value="all">Todas as Prioridades</SelectItem>
                 <SelectItem value="low">Baixa</SelectItem>
-                <SelectItem value="medium">Média</SelectItem>
+                <SelectItem value="medium">Media</SelectItem>
                 <SelectItem value="high">Alta</SelectItem>
                 <SelectItem value="urgent">Urgente</SelectItem>
               </SelectContent>
@@ -257,12 +272,12 @@ export default function ServiceOrdersPage() {
       {/* Lista de ordens */}
       <div className="grid gap-4">
         {paginatedOrders.length === 0 ? (
-          <Card>
+          <Card >
             <CardContent className="pt-6">
               <div className="text-center py-8 text-gray-500">
                 {searchTerm || statusFilter !== "all" || priorityFilter !== "all"
                   ? "Nenhuma ordem encontrada com os filtros aplicados"
-                  : "Nenhuma ordem de serviço cadastrada"}
+                  : "Nenhuma ordem de servico cadastrada"}
               </div>
             </CardContent>
           </Card>
@@ -284,7 +299,7 @@ export default function ServiceOrdersPage() {
                       </p>
                       {order.description && (
                         <p>
-                          <span className="font-medium">Descrição:</span> {order.description}
+                          <span className="font-medium">Descricao:</span> {order.description}
                         </p>
                       )}
                       {order.scheduledDate && (
@@ -331,7 +346,7 @@ export default function ServiceOrdersPage() {
         )}
       </div>
 
-      {/* Paginação */}
+      {/* PaginaASALo */}
       {totalPages > 1 && (
         <div className="flex justify-center gap-2">
           <Button
@@ -354,7 +369,7 @@ export default function ServiceOrdersPage() {
         </div>
       )}
 
-      {/* Formulário */}
+      {/* FormulA!rio */}
       {showForm && (
         <ServiceOrderForm
           clients={clients}
@@ -368,7 +383,7 @@ export default function ServiceOrdersPage() {
         />
       )}
 
-      {/* Visualização */}
+      {/* VisualizaASALo */}
       {viewingOrder && (
         <ServiceOrderView
           order={viewingOrder}
@@ -377,6 +392,10 @@ export default function ServiceOrdersPage() {
           onClose={() => setViewingOrder(null)}
         />
       )}
-    </div>
+      </div>
+    </>
   )
 }
+
+
+

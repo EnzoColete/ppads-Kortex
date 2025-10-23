@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Edit, Plus, Search, Trash2 } from "lucide-react"
-import { supabase } from "@/lib/supabase/client"
 import type { User } from "@/lib/types"
 import { UserForm } from "@/components/user-form"
 import { RoleBadge } from "@/components/role-badge"
@@ -41,22 +40,24 @@ function UsersPageContent() {
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("id, email, full_name, email_verified, role, created_at, updated_at")
-        .order("created_at", { ascending: false })
+      const response = await fetch("/api/users")
+      const payload = await response.json().catch(() => ({ data: [] }))
 
-      if (error) throw error
+      if (!response.ok) {
+        throw new Error(payload?.error || "Erro ao carregar usuarios")
+      }
+
+      const data = Array.isArray(payload.data) ? payload.data : []
 
       setUsers(
-        (data || []).map((row) => ({
+        data.map((row: any) => ({
           id: row.id,
           email: row.email,
-          fullName: row.full_name,
-          emailVerified: Boolean(row.email_verified),
+          fullName: row.fullName,
+          emailVerified: Boolean(row.emailVerified),
           role: row.role,
-          createdAt: new Date(row.created_at),
-          updatedAt: new Date(row.updated_at),
+          createdAt: new Date(row.createdAt),
+          updatedAt: new Date(row.updatedAt),
         })),
       )
     } catch (err) {
@@ -75,14 +76,22 @@ function UsersPageContent() {
     if (!editingUser) return
 
     try {
-      const { data: updated, error } = await supabase
-        .from("users")
-        .update({ full_name: data.fullName.trim(), role: data.role })
-        .eq("email", editingUser.email)
-        .select("id, email, full_name, email_verified, role, created_at, updated_at")
-        .single()
+      const response = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: editingUser.email,
+          updates: { fullName: data.fullName.trim(), role: data.role },
+        }),
+      })
 
-      if (error) throw error
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Erro ao atualizar usuario")
+      }
+
+      const updated = payload.data
 
       setUsers((prev) =>
         prev.map((user) =>
@@ -90,11 +99,11 @@ function UsersPageContent() {
             ? {
                 id: updated.id,
                 email: updated.email,
-                fullName: updated.full_name,
-                emailVerified: Boolean(updated.email_verified),
+                fullName: updated.fullName,
+                emailVerified: Boolean(updated.emailVerified),
                 role: updated.role,
-                createdAt: new Date(updated.created_at),
-                updatedAt: new Date(updated.updated_at),
+                createdAt: new Date(updated.createdAt),
+                updatedAt: new Date(updated.updatedAt),
               }
             : user,
         ),
@@ -111,8 +120,18 @@ function UsersPageContent() {
     if (!confirm("Tem certeza que deseja excluir este usuario?")) return
 
     try {
-      const { error } = await supabase.from("users").delete().eq("email", email)
-      if (error) throw error
+      const response = await fetch("/api/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Erro ao excluir usuario")
+      }
+
       setUsers((prev) => prev.filter((user) => user.email !== email))
     } catch (err) {
       console.error("Error deleting user:", err)
@@ -214,7 +233,9 @@ function UsersPageContent() {
       {isFormOpen && editingUser && (
         <UserForm
           user={{ email: editingUser.email, fullName: editingUser.fullName, role: editingUser.role }}
-          onSubmit={(formData) => handleUpdateUser({ email: editingUser.email, fullName: formData.fullName, role: formData.role })}
+          onSubmit={(formData) =>
+            handleUpdateUser({ email: editingUser.email, fullName: formData.fullName, role: formData.role })
+          }
           onCancel={() => {
             setIsFormOpen(false)
             setEditingUser(null)

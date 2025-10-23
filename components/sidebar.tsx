@@ -28,8 +28,6 @@ const navigation = [
   { name: "Produtos", href: "/products", icon: Package },
   { name: "Recibos", href: "/receipts", icon: Receipt },
   { name: "Gastos Diários", href: "/expenses", icon: CheckSquare },
-  { name: "Relatórios", href: "/reports", icon: FileText },
-  { name: "Exportar", href: "/export", icon: Download },
   { name: "Usuários", href: "/users", icon: UserCog, adminOnly: true },
 ]
 

@@ -1,17 +1,7 @@
-﻿import { Pool, PoolClient } from "pg"
+import type { PoolClient } from "pg"
 import type { ServiceOrder, ServiceOrderItem } from "@/lib/types"
 import { ensureServiceOrdersSchema } from "@/lib/server/ensure-service-orders"
-
-const connectionString = process.env.DATABASE_URL
-
-if (!connectionString) {
-  throw new Error("DATABASE_URL not configured")
-}
-
-const pool = new Pool({
-  connectionString,
-  ssl: connectionString.includes("supabase.co") ? { rejectUnauthorized: false } : undefined,
-})
+import { getPool } from "@/lib/server/db"
 
 const mapNumeric = (value: any): number => {
   if (value === null || value === undefined) return 0
@@ -74,8 +64,48 @@ const mapOrderRow = (row: any, items: ServiceOrderItem[]): ServiceOrder => ({
   updatedAt: new Date(row.updated_at),
 })
 
+async function ensureUniqueOrderNumber(client: PoolClient, requestedOrderNumber?: string | null): Promise<string> {
+  const normalize = (value: string) => value.trim().toUpperCase()
+
+  const exists = async (value: string) => {
+    const { rowCount } = await client.query(
+      "SELECT 1 FROM public.service_orders WHERE upper(order_number) = $1 LIMIT 1",
+      [value],
+    )
+    return rowCount > 0
+  }
+
+  if (requestedOrderNumber && requestedOrderNumber.trim().length > 0) {
+    const base = normalize(requestedOrderNumber)
+    if (!(await exists(base))) {
+      return base
+    }
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const candidate = `${base}-${Math.floor(Math.random() * 10000)
+        .toString()
+        .padStart(4, "0")}`
+      if (!(await exists(candidate))) {
+        return candidate
+      }
+    }
+  }
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const generated = `OS-${Date.now()}-${Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, "0")}`
+    const normalized = normalize(generated)
+    if (!(await exists(normalized))) {
+      return normalized
+    }
+  }
+
+  throw new Error("Nao foi possivel gerar um numero de OS unico. Tente novamente.")
+}
+
 async function withConnection<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect()
+  const client = await getPool().connect()
   try {
     return await callback(client)
   } finally {
@@ -188,6 +218,43 @@ export const serviceOrdersRepository = {
     return withConnection(async (client) => {
       await client.query("BEGIN")
       try {
+        if (!order.clientId) {
+          throw new Error("Cliente obrigatorio para criar a ordem de servico.")
+        }
+
+        const clientCheck = await client.query(
+          "SELECT 1 FROM public.clients WHERE id = $1::uuid LIMIT 1",
+          [order.clientId],
+        )
+
+        if (clientCheck.rowCount === 0) {
+          throw new Error("Cliente informado nao existe.")
+        }
+
+        const orderNumber = await ensureUniqueOrderNumber(client, order.orderNumber)
+
+        const productIds = Array.from(
+          new Set(
+            (order.items ?? [])
+              .map((item) => toNullableUuid(item.productId))
+              .filter((value): value is string => Boolean(value)),
+          ),
+        )
+
+        if (productIds.length > 0) {
+          const { rows: productRows } = await client.query<{ id: string }>(
+            "SELECT id FROM public.products WHERE id = ANY($1::uuid[])",
+            [productIds],
+          )
+
+          const foundIds = new Set(productRows.map((row) => row.id))
+          const missingIds = productIds.filter((id) => !foundIds.has(id))
+
+          if (missingIds.length > 0) {
+            throw new Error(`Produto informado nao existe: ${missingIds.join(", ")}`)
+          }
+        }
+
         const insertOrder = await client.query(
           `
             INSERT INTO public.service_orders (
@@ -207,8 +274,8 @@ export const serviceOrdersRepository = {
             RETURNING *
           `,
           [
-            order.orderNumber,
-            order.clientId,
+            orderNumber,
+            toNullableUuid(order.clientId),
             toNullableUuid(order.assignedTo),
             order.status,
             order.title,
@@ -355,6 +422,7 @@ export const serviceOrdersRepository = {
     })
   },
 }
+
 
 
 

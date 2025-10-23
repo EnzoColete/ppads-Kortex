@@ -1,29 +1,65 @@
-﻿import { NextResponse } from "next/server"
-import { logApiRequest, logApiResponse, logApiError } from "@/lib/api-logger"
-import { requirePermission } from "@/lib/rbac"
+
+import { NextResponse } from "next/server"
+import { z } from "zod"
 import { getCurrentUser } from "@/lib/auth"
-import { logger } from "@/lib/logger"
+import { requirePermission } from "@/lib/rbac"
 import { serviceOrdersRepository } from "@/lib/server/service-orders-repository"
 
-export async function GET(request: Request) {
-  const { startTime } = await logApiRequest(request)
+const serviceOrderSchema = z
+  .object({
+    orderNumber: z.string().trim().min(1, "Numero da OS obrigatorio").optional(),
+    clientId: z
+      .string({
+        required_error: "Cliente obrigatorio",
+        invalid_type_error: "Cliente invalido",
+      })
+      .trim()
+      .uuid("Cliente invalido"),
+    assignedTo: z.string().trim().uuid().optional().nullable(),
+    status: z.enum(["pending", "in_progress", "completed", "cancelled"]).default("pending"),
+    title: z
+      .string({
+        required_error: "Titulo obrigatorio",
+        invalid_type_error: "Titulo invalido",
+      })
+      .trim()
+      .min(1, "Informe um titulo para a ordem"),
+    description: z.string().trim().optional(),
+    priority: z.enum(["low", "medium", "high", "urgent"]).optional().nullable(),
+    scheduledDate: z.string().trim().optional().nullable(),
+    completedDate: z.string().trim().optional().nullable(),
+    totalValue: z.coerce.number().min(0),
+    notes: z.string().trim().optional().nullable(),
+    items: z
+      .array(
+        z.object({
+          productId: z.string().trim().uuid().optional().nullable(),
+          description: z.string().trim().min(1, "Descricao obrigatoria"),
+          quantity: z.coerce.number().min(0),
+          unitPrice: z.coerce.number().min(0),
+          total: z.coerce.number().min(0),
+        }),
+      )
+      .default([]),
+  })
+  .transform((data) => ({
+    ...data,
+    orderNumber: data.orderNumber ?? `OS-${Date.now()}`,
+  }))
 
+export async function GET(request: Request) {
   try {
-    await requirePermission("service_orders", "read")
+    const currentUser = await getCurrentUser()
+    const normalizedRole = currentUser?.role?.trim().toLowerCase()
+
+    if (!currentUser || normalizedRole !== "client") {
+      await requirePermission("service_orders", "read")
+    }
 
     const orders = await serviceOrdersRepository.getAll()
-
-    logger.logBusinessEvent("service_orders_listed", {
-      count: orders.length,
-    })
-
-    logApiResponse("GET", "/api/service-orders", 200, startTime, {
-      count: orders.length,
-    })
-
-    return NextResponse.json(orders)
+    return NextResponse.json({ data: orders })
   } catch (error) {
-    logApiError("GET", "/api/service-orders", error as Error)
+    console.error("GET /api/service-orders failed:", error)
     const message = error instanceof Error ? error.message : "Failed to fetch service orders"
     const status = message.toLowerCase().includes("acesso negado") ? 403 : 500
     return NextResponse.json({ error: message }, { status })
@@ -31,36 +67,45 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { startTime } = await logApiRequest(request)
-
   try {
     const currentUser = await getCurrentUser()
-    const normalizedRole = currentUser?.role?.trim().toLowerCase()
-
-    if (normalizedRole !== "client") {
-      await requirePermission("service_orders", "create")
+    if (!currentUser) {
+      return NextResponse.json({ error: "Acesso negado: faca login para criar ordens de servico." }, { status: 401 })
     }
 
     const body = await request.json()
-    const order = await serviceOrdersRepository.create(body)
+    const parsed = serviceOrderSchema.safeParse(body)
 
-    logger.logBusinessEvent("service_order_created", {
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      clientId: order.clientId,
-      totalValue: order.totalValue,
-    })
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Payload invalido.", details: parsed.error.flatten() },
+        { status: 400 },
+      )
+    }
 
-    logApiResponse("POST", "/api/service-orders", 201, startTime, {
-      orderId: order.id,
-    })
+    const order = await serviceOrdersRepository.create(parsed.data)
 
-    return NextResponse.json(order, { status: 201 })
+    return NextResponse.json({ data: order }, { status: 201 })
   } catch (error) {
-    logApiError("POST", "/api/service-orders", error as Error)
+    console.error("POST /api/service-orders failed:", error)
     const message = error instanceof Error ? error.message : "Failed to create service order"
-    const status = message.toLowerCase().includes("acesso negado") ? 403 : 500
+    const lowered = message.toLowerCase()
+    let status = 500
+    if (lowered.includes("acesso negado")) {
+      status = 403
+    } else if (
+      lowered.includes("cliente") ||
+      lowered.includes("produto") ||
+      lowered.includes("numero de os") ||
+      lowered.includes("numero da os") ||
+      lowered.includes("numero de ordem") ||
+      lowered.includes("numero da ordem") ||
+      lowered.includes("obrigatorio") ||
+      lowered.includes("invalido") ||
+      lowered.includes("descricao obrigatoria")
+    ) {
+      status = 400
+    }
     return NextResponse.json({ error: message }, { status })
   }
 }
-

@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   Supplier,
   Client,
   Product,
@@ -29,6 +29,43 @@ const mapClientFromDb = (client: any) => {
     cpfCnpj: cpf_cnpj,
   }
 }
+
+const DAILY_EXPENSE_CATEGORY_LABELS: Record<string, string> = {
+  alimentacao: "Alimentação",
+  combustivel: "Combustível",
+  pedagio: "Pedágio",
+  fornecedor: "Fornecedor",
+}
+
+const normalizeDailyExpenseCategory = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim()
+
+const mapDailyExpenseCategoryForDb = (value: string) => {
+  const slug = normalizeDailyExpenseCategory(value)
+  if (!DAILY_EXPENSE_CATEGORY_LABELS[slug]) {
+    const allowed = Object.values(DAILY_EXPENSE_CATEGORY_LABELS).join(", ")
+    throw new Error(`Categoria '${value}' não é aceita. Utilize uma das opções: ${allowed}.`)
+  }
+  return slug
+}
+
+const mapDailyExpenseCategoryForDisplay = (value: string) => DAILY_EXPENSE_CATEGORY_LABELS[value] ?? value
+
+const mapProductFromApi = (product: any): Product => ({
+  id: product.id,
+  name: product.name,
+  description: product.description ?? "",
+  price: typeof product.price === "number" ? product.price : Number(product.price ?? 0),
+  unit: product.unit ?? "",
+  type: product.type ?? undefined,
+  createdAt: product.createdAt ? new Date(product.createdAt) : product.created_at ? new Date(product.created_at) : new Date(),
+  updatedAt: product.updatedAt ? new Date(product.updatedAt) : product.updated_at ? new Date(product.updated_at) : new Date(),
+})
 
 // Suppliers
 export const supplierStorage = {
@@ -76,7 +113,7 @@ export const supplierStorage = {
 
       if (error) {
         logger.error("Error creating supplier", error)
-        throw new Error("NÃ£o foi possÃ­vel criar o fornecedor. Verifique se o Supabase estÃ¡ configurado.")
+        throw new Error("Não foi possível criar o fornecedor. Verifique se o Supabase está configurado.")
       }
 
       logger.logBusinessEvent("supplier_created", {
@@ -87,7 +124,7 @@ export const supplierStorage = {
       return data
     } catch (error) {
       logger.error("Error creating supplier", error as Error)
-      throw new Error("Erro de conexÃ£o com o banco de dados.")
+      throw new Error("Erro de conexão com o banco de dados.")
     }
   },
 
@@ -131,103 +168,94 @@ export const supplierStorage = {
 export const clientStorage = {
   getAll: async (): Promise<Client[]> => {
     try {
-      const { data, error } = await supabase.from("clients").select("*").order("created_at", { ascending: false })
+      const response = await fetch("/api/clients", { method: "GET" })
+      const payload = await safeParseJson(response)
 
-      if (error) {
-        console.error("Error fetching clients:", error)
-        return []
+      if (!response.ok) {
+        const message = payload?.error || "Erro ao listar clientes."
+        throw new Error(message)
       }
 
-      return (data || []).map(mapClientFromDb)
+      const rows = Array.isArray(payload?.data) ? payload.data : []
+      return rows.map(mapClientFromDb)
     } catch (error) {
-      console.error("Error connecting to database:", error)
+      console.error("Error fetching clients:", error)
       return []
     }
   },
 
   getById: async (id: string): Promise<Client | undefined> => {
-    const { data, error } = await supabase.from("clients").select("*").eq("id", id).single()
+    try {
+      const response = await fetch(`/api/clients/${id}`, { method: "GET" })
+      const payload = await safeParseJson(response)
 
-    if (error) {
+      if (!response.ok) {
+        const message = payload?.error
+        if (response.status !== 404) {
+          console.error("Error fetching client:", message)
+        }
+        return undefined
+      }
+
+      return payload?.data ? mapClientFromDb(payload.data) : undefined
+    } catch (error) {
       console.error("Error fetching client:", error)
       return undefined
     }
-
-    return data ? mapClientFromDb(data) : undefined
   },
 
   create: async (client: Omit<Client, "id" | "createdAt" | "updatedAt">): Promise<Client> => {
-    const { data: existingEmailClient, error: emailCheckError } = await supabase
-      .from("clients")
-      .select("id, email, name")
-      .eq("email", client.email)
-      .maybeSingle()
+    const response = await fetch("/api/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(client),
+    })
 
-    if (emailCheckError && emailCheckError.code !== "PGRST116") {
-      console.error("Error checking existing client email:", emailCheckError)
-      throw new Error("Erro ao verificar email existente")
+    const payload = await safeParseJson(response)
+    if (!response.ok) {
+      const message = payload?.error || "Erro ao criar cliente."
+      throw new Error(message)
     }
 
-    if (existingEmailClient) {
-      throw new Error(`JÃ¡ existe um cliente cadastrado com este email: ${existingEmailClient.name}`)
-    }
-
-    const { data: existingCpfClient, error: cpfCheckError } = await supabase
-      .from("clients")
-      .select("id, cpf_cnpj, name")
-      .eq("cpf_cnpj", client.cpfCnpj)
-      .maybeSingle()
-
-    if (cpfCheckError && cpfCheckError.code !== "PGRST116") {
-      console.error("Error checking existing client CPF/CNPJ:", cpfCheckError)
-      throw new Error("Erro ao verificar CPF/CNPJ existente")
-    }
-
-    if (existingCpfClient) {
-      throw new Error(`JÃ¡ existe um cliente cadastrado com este CPF/CNPJ: ${existingCpfClient.name}`)
-    }
-
-    const dbClient = mapClientToDb(client)
-    const { data, error } = await supabase.from("clients").insert([dbClient]).select().single()
-
-    if (error) {
-      console.error("Error creating client:", error)
-      if (error.code === "23505") {
-        if (error.message.includes("clients_email_key")) {
-          throw new Error("JÃ¡ existe um cliente cadastrado com este email")
-        }
-        if (error.message.includes("clients_cpf_cnpj_key")) {
-          throw new Error("JÃ¡ existe um cliente cadastrado com este CPF/CNPJ")
-        }
-        throw new Error("JÃ¡ existe um cliente cadastrado com estes dados")
-      }
-      throw error
-    }
-
-    return mapClientFromDb(data)
+    return mapClientFromDb(payload.data)
   },
 
   update: async (id: string, updates: Partial<Client>): Promise<Client | null> => {
-    const dbUpdates = mapClientToDb(updates)
-    const { data, error } = await supabase.from("clients").update(dbUpdates).eq("id", id).select().single()
+    try {
+      const response = await fetch(`/api/clients/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
 
-    if (error) {
+      const payload = await safeParseJson(response)
+
+      if (!response.ok) {
+        const message = payload?.error || "Erro ao atualizar cliente."
+        throw new Error(message)
+      }
+
+      return payload?.data ? mapClientFromDb(payload.data) : null
+    } catch (error) {
       console.error("Error updating client:", error)
       return null
     }
-
-    return data ? mapClientFromDb(data) : null
   },
 
   delete: async (id: string): Promise<boolean> => {
-    const { error } = await supabase.from("clients").delete().eq("id", id)
+    try {
+      const response = await fetch(`/api/clients/${id}`, { method: "DELETE" })
+      if (!response.ok) {
+        const payload = await safeParseJson(response)
+        const message = payload?.error || "Erro ao excluir cliente."
+        throw new Error(message)
+      }
 
-    if (error) {
+      return true
+    } catch (error) {
       console.error("Error deleting client:", error)
       return false
     }
-
-    return true
   },
 }
 
@@ -235,14 +263,16 @@ export const clientStorage = {
 export const productStorage = {
   getAll: async (): Promise<Product[]> => {
     try {
-      const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false })
+      const response = await fetch("/api/products")
+      const payload = await safeParseJson(response)
 
-      if (error) {
-        console.error("Error fetching products:", error)
-        return []
+      if (!response.ok) {
+        const message = payload?.error || "Erro ao listar produtos."
+        throw new Error(message)
       }
 
-      return data || []
+      const rows = Array.isArray(payload?.data) ? payload.data : []
+      return rows.map(mapProductFromApi)
     } catch (error) {
       console.error("Error connecting to database:", error)
       return []
@@ -250,56 +280,88 @@ export const productStorage = {
   },
 
   getById: async (id: string): Promise<Product | undefined> => {
-    const { data, error } = await supabase.from("products").select("*").eq("id", id).single()
+    try {
+      const response = await fetch(`/api/products/${id}`)
+      const payload = await safeParseJson(response)
 
-    if (error) {
+      if (!response.ok) {
+        if (response.status !== 404) {
+          console.error("Error fetching product:", payload?.error)
+        }
+        return undefined
+      }
+
+      return payload?.data ? mapProductFromApi(payload.data) : undefined
+    } catch (error) {
       console.error("Error fetching product:", error)
       return undefined
     }
-
-    return data
   },
 
   create: async (product: Omit<Product, "id" | "createdAt" | "updatedAt">): Promise<Product> => {
-    const productData = {
-      name: product.name,
-      description: product.description || "",
-      price: product.price,
-      unit: product.unit,
-      // Type is now optional - only include if provided
-      ...(product.type && { type: product.type }),
-    }
+    try {
+      const response = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          unit: product.unit,
+          type: product.type,
+        }),
+      })
 
-    const { data, error } = await supabase.from("products").insert([productData]).select().single()
+      const payload = await safeParseJson(response)
 
-    if (error) {
+      if (!response.ok) {
+        const message = payload?.error || "Erro ao criar produto."
+        throw new Error(message)
+      }
+
+      return mapProductFromApi(payload.data)
+    } catch (error) {
       console.error("Error creating product:", error)
       throw error
     }
-
-    return data
   },
 
   update: async (id: string, updates: Partial<Product>): Promise<Product | null> => {
-    const { data, error } = await supabase.from("products").update(updates).eq("id", id).select().single()
+    try {
+      const response = await fetch(`/api/products/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
 
-    if (error) {
+      const payload = await safeParseJson(response)
+
+      if (!response.ok) {
+        const message = payload?.error || "Erro ao atualizar produto."
+        throw new Error(message)
+      }
+
+      return payload?.data ? mapProductFromApi(payload.data) : null
+    } catch (error) {
       console.error("Error updating product:", error)
       return null
     }
-
-    return data
   },
 
   delete: async (id: string): Promise<boolean> => {
-    const { error } = await supabase.from("products").delete().eq("id", id)
+    try {
+      const response = await fetch(`/api/products/${id}`, { method: "DELETE" })
+      if (!response.ok) {
+        const payload = await safeParseJson(response)
+        const message = payload?.error || "Erro ao excluir produto."
+        throw new Error(message)
+      }
 
-    if (error) {
+      return true
+    } catch (error) {
       console.error("Error deleting product:", error)
       return false
     }
-
-    return true
   },
 }
 
@@ -416,7 +478,7 @@ export const receiptStorage = {
 
     if (receiptError) {
       console.error("Error creating receipt:", receiptError)
-      throw new Error("NÃ£o foi possÃ­vel criar o recibo. Verifique se o Supabase estÃ¡ configurado.")
+      throw new Error("Não foi possível criar o recibo. Verifique se o Supabase está configurado.")
     }
 
     // Criar produtos do recibo se existirem
@@ -516,7 +578,7 @@ export const dailyExpenseStorage = {
       return (data || []).map((item) => ({
         id: item.id,
         date: item.date,
-        category: item.category,
+        category: mapDailyExpenseCategoryForDisplay(item.category),
         amount: item.amount,
         observations: item.observations,
         supplierId: item.supplier_id,
@@ -540,7 +602,7 @@ export const dailyExpenseStorage = {
       ? {
           id: data.id,
           date: data.date,
-          category: data.category,
+          category: mapDailyExpenseCategoryForDisplay(data.category),
           amount: data.amount,
           observations: data.observations,
           supplierId: data.supplier_id,
@@ -550,14 +612,16 @@ export const dailyExpenseStorage = {
   },
 
   create: async (expense: Omit<DailyExpense, "id" | "createdAt">): Promise<DailyExpense> => {
-    // ValidaÃ§Ã£o bÃ¡sica
+    // Validação básica
     if (!expense.date || !expense.category || expense.amount === undefined || expense.amount <= 0) {
-      throw new Error("Dados invÃ¡lidos: data, categoria e valor sÃ£o obrigatÃ³rios")
+      throw new Error("Dados inválidos: data, categoria e valor são obrigatórios")
     }
+
+    const categorySlug = mapDailyExpenseCategoryForDb(expense.category)
 
     const dbExpense = {
       date: expense.date,
-      category: expense.category,
+      category: categorySlug,
       amount: Number(expense.amount),
       observations: expense.observations || null,
       supplier_id: expense.supplierId || null,
@@ -571,13 +635,13 @@ export const dailyExpenseStorage = {
     }
 
     if (!data) {
-      throw new Error("Nenhum dado retornado apÃ³s inserÃ§Ã£o")
+      throw new Error("Nenhum dado retornado após inserção")
     }
 
     return {
       id: data.id,
       date: data.date,
-      category: data.category,
+      category: mapDailyExpenseCategoryForDisplay(data.category),
       amount: data.amount,
       observations: data.observations,
       supplierId: data.supplier_id,
@@ -702,23 +766,40 @@ const deserializeServiceOrderItem = (item: any): ServiceOrderItem => ({
   createdAt: new Date(item.createdAt ?? item.created_at),
 })
 
-const deserializeServiceOrder = (order: any): ServiceOrder => ({
-  id: order.id,
-  orderNumber: order.orderNumber ?? order.order_number,
-  clientId: order.clientId ?? order.client_id,
-  assignedTo: order.assignedTo ?? order.assigned_to ?? undefined,
-  status: order.status,
-  title: order.title,
-  description: order.description ?? "",
-  priority: order.priority ?? undefined,
-  scheduledDate: order.scheduledDate ?? order.scheduled_date ?? undefined,
-  completedDate: order.completedDate ?? order.completed_date ?? undefined,
-  totalValue: typeof order.totalValue === "number" ? order.totalValue : Number(order.total_value ?? 0),
-  notes: order.notes ?? undefined,
-  items: Array.isArray(order.items) ? order.items.map(deserializeServiceOrderItem) : [],
-  createdAt: new Date(order.createdAt ?? order.created_at),
-  updatedAt: new Date(order.updatedAt ?? order.updated_at),
-})
+const deserializeServiceOrder = (order: any): ServiceOrder => {
+  const rawOrderNumber = (order.orderNumber ?? order.order_number ?? "").toString().trim()
+  const orderNumber = rawOrderNumber.length > 0
+    ? rawOrderNumber
+    : "OS-" + (order.id || "TEMP").toString().slice(0, 8)
+
+  const rawCreatedAt = order.createdAt ?? order.created_at
+  const rawUpdatedAt = order.updatedAt ?? order.updated_at
+
+  const rawItems = Array.isArray(order.items)
+    ? order.items
+    : Array.isArray(order.items?.data)
+      ? order.items.data
+      : []
+
+  return {
+    id: order.id,
+    orderNumber,
+    clientId: order.clientId ?? order.client_id ?? "",
+    assignedTo: order.assignedTo ?? order.assigned_to ?? undefined,
+    status: order.status ?? "pending",
+    title: order.title ?? "",
+    description: order.description ?? "",
+    priority: order.priority ?? undefined,
+    scheduledDate: order.scheduledDate ?? order.scheduled_date ?? undefined,
+    completedDate: order.completedDate ?? order.completed_date ?? undefined,
+    totalValue: typeof order.totalValue === "number" ? order.totalValue : Number(order.total_value ?? 0),
+    notes: order.notes ?? undefined,
+    items: rawItems.map(deserializeServiceOrderItem),
+    createdAt: rawCreatedAt ? new Date(rawCreatedAt) : new Date(),
+    updatedAt: rawUpdatedAt ? new Date(rawUpdatedAt) : new Date(),
+  }
+}
+
 
 export const serviceOrderStorage = {
   getAll: async (): Promise<ServiceOrder[]> => {
@@ -728,7 +809,7 @@ export const serviceOrderStorage = {
       })
 
       if (response.status === 403 || response.status === 401) {
-        console.warn("Sem permissão para listar ordens de serviço; retornando lista vazia.")
+        console.warn("Sem permisso para listar ordens de servio; retornando lista vazia.")
         return []
       }
 
@@ -741,10 +822,16 @@ export const serviceOrderStorage = {
         throw new Error(message)
       }
 
-      const payload = (await response.json()) as any[]
-      return payload.map(deserializeServiceOrder)
+      const payload = await response.json()
+      const data = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : []
+
+      return data.map(deserializeServiceOrder)
     } catch (error) {
-      console.error("Falha ao carregar ordens de serviço:", error)
+      console.error("Falha ao carregar ordens de servio:", error)
       return []
     }
   },
@@ -755,23 +842,18 @@ export const serviceOrderStorage = {
     })
     if (response.status === 404) return undefined
     if (response.status === 403 || response.status === 401) {
-      console.warn("Sem permissão para acessar esta ordem de serviço; retornando indefinido.")
+      console.warn("Sem permisso para acessar esta ordem de servio; retornando indefinido.")
       return undefined
     }
     if (!response.ok) {
       throw new Error("Erro ao carregar ordem de servico.")
     }
     const payload = await response.json()
-    return deserializeServiceOrder(payload)
+    const record = payload?.data ?? payload
+    return record ? deserializeServiceOrder(record) : undefined
   },
 
   create: async (order: Omit<ServiceOrder, "id" | "createdAt" | "updatedAt">): Promise<ServiceOrder> => {
-    const response = await fetch(resolveApiUrl("/api/service-orders"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(order),
-    })
-
     try {
       const response = await fetch(resolveApiUrl("/api/service-orders"), {
         method: "POST",
@@ -779,15 +861,16 @@ export const serviceOrderStorage = {
         body: JSON.stringify(order),
       })
 
+      const payload = await safeParseJson(response)
+
       if (!response.ok) {
-        const payload = await safeParseJson(response)
         throw new Error(payload?.error ?? "Erro ao criar ordem de servico.")
       }
 
-      const payload = await response.json()
-      return deserializeServiceOrder(payload)
+      const record = payload?.data ?? payload
+      return deserializeServiceOrder(record)
     } catch (error) {
-      console.error("Falha ao criar ordem de serviço:", error)
+      console.error("Falha ao criar ordem de servio:", error)
       throw error instanceof Error ? error : new Error("Erro ao criar ordem de servico.")
     }
   },
@@ -805,8 +888,9 @@ export const serviceOrderStorage = {
       throw new Error(payload?.error ?? "Erro ao atualizar ordem de servico.")
     }
 
-    const payload = await response.json()
-    return deserializeServiceOrder(payload)
+    const payload = await safeParseJson(response)
+    const record = payload?.data ?? payload
+    return deserializeServiceOrder(record)
   },
 
   delete: async (id: string): Promise<boolean> => {
@@ -981,6 +1065,7 @@ const mapReceiptFromDb = (receipt: any) => {
     ...(has_invoice !== undefined && { hasInvoice: has_invoice }),
   }
 }
+
 
 
 
