@@ -34,6 +34,12 @@ const navigation = [
 export function Sidebar() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
+  const hideRoutes = ["/auth/login", "/auth/register"]
+  const shouldHideSidebar = hideRoutes.some((route) => pathname?.startsWith(route))
+
+  if (shouldHideSidebar) {
+    return null
+  }
 
   return (
     <>
