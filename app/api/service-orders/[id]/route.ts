@@ -1,17 +1,32 @@
-import { NextResponse } from "next/server"
+﻿import { NextResponse } from "next/server"
 import { logApiRequest, logApiResponse, logApiError } from "@/lib/api-logger"
-import { requirePermission } from "@/lib/rbac"
+import { getCurrentUser } from "@/lib/auth"
 import { logger } from "@/lib/logger"
 import { serviceOrdersRepository } from "@/lib/server/service-orders-repository"
+
+function isAdmin(role?: string | null) {
+  return (role ?? "").toUpperCase() === "ADMIN"
+}
+
+function unauthorized() {
+  return NextResponse.json({ error: "Acesso negado: faca login para acessar ordens de servico." }, { status: 401 })
+}
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const { startTime } = await logApiRequest(request)
   const { id } = params
 
   try {
-    await requirePermission("service_orders", "read")
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      logApiResponse("GET", `/api/service-orders/${id}`, 401, startTime)
+      return unauthorized()
+    }
 
-    const order = await serviceOrdersRepository.getById(id)
+    const order = await serviceOrdersRepository.getById(id, {
+      userId: currentUser.id,
+      isAdmin: isAdmin(currentUser.role),
+    })
 
     if (!order) {
       logApiResponse("GET", `/api/service-orders/${id}`, 404, startTime)
@@ -33,10 +48,17 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const { id } = params
 
   try {
-    await requirePermission("service_orders", "update")
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      logApiResponse("PATCH", `/api/service-orders/${id}`, 401, startTime)
+      return unauthorized()
+    }
 
     const body = await request.json()
-    const order = await serviceOrdersRepository.update(id, body)
+    const order = await serviceOrdersRepository.update(id, body, {
+      userId: currentUser.id,
+      isAdmin: isAdmin(currentUser.role),
+    })
 
     if (!order) {
       logApiResponse("PATCH", `/api/service-orders/${id}`, 404, startTime)
@@ -46,7 +68,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     logger.logBusinessEvent("service_order_updated", {
       orderId: order.id,
       orderNumber: order.orderNumber,
-      changes: Object.keys(body),
+      changes: Object.keys(body || {}),
     })
 
     logApiResponse("PATCH", `/api/service-orders/${id}`, 200, startTime)
@@ -64,9 +86,16 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   const { id } = params
 
   try {
-    await requirePermission("service_orders", "delete")
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      logApiResponse("DELETE", `/api/service-orders/${id}`, 401, startTime)
+      return unauthorized()
+    }
 
-    const success = await serviceOrdersRepository.delete(id)
+    const success = await serviceOrdersRepository.delete(id, {
+      userId: currentUser.id,
+      isAdmin: isAdmin(currentUser.role),
+    })
 
     if (!success) {
       logApiResponse("DELETE", `/api/service-orders/${id}`, 404, startTime)

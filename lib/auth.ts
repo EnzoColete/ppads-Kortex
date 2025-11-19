@@ -16,5 +16,5 @@ export async function getCurrentUser(): Promise<User | null> {
 export async function hasRole(roles: string[]): Promise<boolean> {
   const user = await getCurrentUser()
   if (!user) return false
-  return roles.includes(user.role)
+  return roles.includes((user.role || "").toUpperCase())
 }

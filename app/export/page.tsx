@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -8,6 +8,7 @@ import { Download, Table, Users, Package } from "lucide-react"
 import { supplierStorage, clientStorage, productStorage, receiptStorage } from "@/lib/storage"
 import type { Supplier, Client, Product, Receipt } from "@/lib/types"
 import { exportToExcel } from "@/lib/excel-export"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
 
 type ExportType = "suppliers" | "clients" | "products" | "receipts"
 
@@ -61,7 +62,7 @@ export default function ExportPage() {
               { header: "Email", key: "email", width: 30 },
               { header: "Telefone", key: "phone", width: 20 },
               { header: "CNPJ", key: "cnpj", width: 20 },
-              { header: "Endere�o", key: "address", width: 40 },
+              { header: "Endereï¿½o", key: "address", width: 40 },
               { header: "Data Cadastro", key: "createdAt", width: 15 },
             ],
             data: suppliers.map((s) => ({
@@ -84,7 +85,7 @@ export default function ExportPage() {
               { header: "Email", key: "email", width: 30 },
               { header: "Telefone", key: "phone", width: 20 },
               { header: "CPF/CNPJ", key: "cpfCnpj", width: 20 },
-              { header: "Endere�o", key: "address", width: 40 },
+              { header: "Endereï¿½o", key: "address", width: 40 },
               { header: "Data Cadastro", key: "createdAt", width: 15 },
             ],
             data: clients.map((c) => ({
@@ -104,8 +105,8 @@ export default function ExportPage() {
             sheetName: "Produtos",
             columns: [
               { header: "Nome", key: "name", width: 30 },
-              { header: "Descri��o", key: "description", width: 40 },
-              { header: "Pre�o", key: "price", width: 15 },
+              { header: "Descriï¿½ï¿½o", key: "description", width: 40 },
+              { header: "Preï¿½o", key: "price", width: 15 },
               { header: "Unidade", key: "unit", width: 15 },
               { header: "Tipo", key: "type", width: 20 },
               { header: "Data Cadastro", key: "createdAt", width: 15 },
@@ -143,10 +144,10 @@ export default function ExportPage() {
           break
       }
 
-      alert("Exporta��o conclu�da com sucesso!")
+      showSuccessToast("Exportação concluída com sucesso.")
     } catch (error) {
       console.error("Erro ao exportar:", error)
-      alert("Erro ao exportar dados. Tente novamente.")
+      showErrorToast("Erro ao exportar dados. Tente novamente.")
     } finally {
       setIsExporting(false)
     }
@@ -229,7 +230,7 @@ export default function ExportPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Configura��es de Exporta��o</CardTitle>
+          <CardTitle>Configuraï¿½ï¿½es de Exportaï¿½ï¿½o</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
@@ -248,12 +249,12 @@ export default function ExportPage() {
           </div>
 
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <h3 className="font-medium text-blue-900 mb-2">Resumo da Exporta��o:</h3>
+            <h3 className="font-medium text-blue-900 mb-2">Resumo da Exportaï¿½ï¿½o:</h3>
             <p className="text-sm text-blue-800">
-              Ser� exportado: <strong>{getDataCount()} registro(s)</strong> em formato <strong>Excel (.csv)</strong>
+              Serï¿½ exportado: <strong>{getDataCount()} registro(s)</strong> em formato <strong>Excel (.csv)</strong>
             </p>
             <p className="text-xs text-blue-600 mt-2">
-              O arquivo ser� compat�vel com Microsoft Excel, Google Sheets e LibreOffice Calc
+              O arquivo serï¿½ compatï¿½vel com Microsoft Excel, Google Sheets e LibreOffice Calc
             </p>
           </div>
 
@@ -266,3 +267,5 @@ export default function ExportPage() {
     </div>
   )
 }
+
+

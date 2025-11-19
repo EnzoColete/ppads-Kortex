@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata, Viewport } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
+import "toastify-js/src/toastify.css"
 import "./globals.css"
 import { Sidebar } from "@/components/sidebar"
 

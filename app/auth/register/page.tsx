@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -17,34 +17,29 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    setError(null)
-    setSuccess(null)
-
     const trimmedName = fullName.trim()
     const words = trimmedName.split(/\s+/).filter(Boolean)
     if (words.length < 2) {
-      setError("Informe ao menos nome e sobrenome.")
+      showErrorToast("Informe ao menos nome e sobrenome.")
       return
     }
 
     if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`A senha deve ter no mínimo ${MIN_PASSWORD_LENGTH} caracteres.`)
+      showErrorToast(`A senha deve ter no mínimo ${MIN_PASSWORD_LENGTH} caracteres.`)
       return
     }
 
     if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      setError("A senha deve conter letras e números.")
+      showErrorToast("A senha deve conter letras e números.")
       return
     }
 
     if (password !== confirmPassword) {
-      setError("As senhas não coincidem.")
+      showErrorToast("As senhas não coincidem.")
       return
     }
 
@@ -71,11 +66,11 @@ export default function RegisterPage() {
         const message = typeof payload.message === "string" && payload.message.length > 0
           ? payload.message
           : "Erro ao realizar cadastro."
-        setError(message)
+        showErrorToast(message)
         return
       }
 
-      setSuccess(payload.message || "Cadastro realizado! Verifique seu e-mail.")
+      showSuccessToast(payload.message || "Cadastro realizado! Verifique seu e-mail.")
       setFullName("")
       setEmail("")
       setPassword("")
@@ -84,7 +79,7 @@ export default function RegisterPage() {
       setTimeout(() => router.push("/auth/login"), 3000)
     } catch (submissionError) {
       console.error(submissionError)
-      setError("Erro inesperado ao realizar cadastro.")
+      showErrorToast("Erro inesperado ao realizar cadastro.")
     } finally {
       setIsLoading(false)
     }
@@ -157,18 +152,6 @@ export default function RegisterPage() {
                     disabled={isLoading}
                   />
                 </div>
-
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-
-                {success && (
-                  <Alert variant="default">
-                    <AlertDescription>{success}</AlertDescription>
-                  </Alert>
-                )}
 
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Criando conta..." : "Cadastrar"}

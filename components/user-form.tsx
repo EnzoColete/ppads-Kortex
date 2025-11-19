@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X } from "lucide-react"
 import type { Role } from "@/lib/rbac"
+import { showErrorToast } from "@/lib/toast"
 
 interface UserFormData {
   email: string
@@ -26,14 +27,14 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
   const [formData, setFormData] = useState<UserFormData>({
     email: user?.email || "",
     fullName: user?.fullName || "",
-    role: (user?.role || "client") as Role,
+    role: (user?.role || "USER") as Role,
   })
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     if (!formData.email || !formData.fullName) {
-      alert("Preencha todos os campos obrigatorios")
+      showErrorToast("Preencha todos os campos obrigatórios.")
       return
     }
 
@@ -85,15 +86,13 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">Administrador</SelectItem>
-                  <SelectItem value="technician">Tecnico</SelectItem>
-                  <SelectItem value="client">Cliente</SelectItem>
+                  <SelectItem value="ADMIN">Administrador</SelectItem>
+                  <SelectItem value="USER">Usuário</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500 mt-1">
-                {formData.role === "admin" && "Acesso total ao sistema"}
-                {formData.role === "technician" && "Pode gerenciar ordens de servico"}
-                {formData.role === "client" && "Acesso limitado as proprias ordens"}
+                {formData.role === "ADMIN" && "Acesso total ao sistema"}
+                {formData.role === "USER" && "Pode gerenciar apenas os proprios dados"}
               </p>
             </div>
 

@@ -48,6 +48,7 @@ export async function ensureServiceOrdersSchema(): Promise<void> {
         CREATE TABLE IF NOT EXISTS public.service_orders (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           order_number text UNIQUE NOT NULL,
+          user_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
           client_id uuid REFERENCES public.clients(id) ON DELETE SET NULL,
           assigned_to uuid REFERENCES public.users(id) ON DELETE SET NULL,
           status service_order_status NOT NULL DEFAULT 'pending',
@@ -64,6 +65,33 @@ export async function ensureServiceOrdersSchema(): Promise<void> {
       `)
 
       await client.query(`
+        ALTER TABLE public.service_orders
+          ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES public.users(id) ON DELETE CASCADE
+      `)
+
+      await client.query(`
+        DO $$
+        DECLARE
+          default_owner uuid;
+        BEGIN
+          SELECT id
+            INTO default_owner
+            FROM public.users
+           ORDER BY CASE WHEN role = 'ADMIN' THEN 0 ELSE 1 END, created_at
+           LIMIT 1;
+
+          IF default_owner IS NOT NULL THEN
+            UPDATE public.service_orders
+               SET user_id = default_owner
+             WHERE user_id IS NULL;
+
+            ALTER TABLE public.service_orders
+              ALTER COLUMN user_id SET NOT NULL;
+          END IF;
+        END $$;
+      `)
+
+      await client.query(`
         CREATE TABLE IF NOT EXISTS public.service_order_items (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           service_order_id uuid REFERENCES public.service_orders(id) ON DELETE CASCADE,
@@ -77,6 +105,7 @@ export async function ensureServiceOrdersSchema(): Promise<void> {
       `)
 
       await client.query("CREATE INDEX IF NOT EXISTS idx_service_orders_client ON public.service_orders (client_id)")
+      await client.query("CREATE INDEX IF NOT EXISTS idx_service_orders_user ON public.service_orders (user_id)")
       await client.query("CREATE INDEX IF NOT EXISTS idx_service_orders_assigned ON public.service_orders (assigned_to)")
       await client.query("CREATE INDEX IF NOT EXISTS idx_service_orders_status ON public.service_orders (status)")
       await client.query("CREATE INDEX IF NOT EXISTS idx_service_orders_scheduled ON public.service_orders (scheduled_date)")

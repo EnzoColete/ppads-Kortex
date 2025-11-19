@@ -4,11 +4,13 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Plus, Search, Edit, Trash2, AlertCircle } from "lucide-react"
+import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { clientStorage } from "@/lib/storage"
 import type { Client } from "@/lib/types"
 import { ClientForm } from "@/components/client-form"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useOwnerDirectory } from "@/hooks/use-owner-directory"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
@@ -16,7 +18,14 @@ export default function ClientsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [ownerFilter, setOwnerFilter] = useState("all")
+  const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setOwnerFilter("all")
+    }
+  }, [isAdmin])
 
   useEffect(() => {
     loadClients()
@@ -28,29 +37,33 @@ export default function ClientsPage() {
       setClients(data)
     } catch (error) {
       console.error("Erro ao carregar clientes:", error)
+      showErrorToast("Erro ao carregar clientes.")
     } finally {
       setLoading(false)
     }
   }
 
   const filteredClients = clients.filter(
-    (client) =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.cpfCnpj.includes(searchTerm),
+    (client) => {
+      const matchesSearch =
+        client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.cpfCnpj.includes(searchTerm)
+      const matchesOwner = !isAdmin || ownerFilter === "all" || client.userId === ownerFilter
+      return matchesSearch && matchesOwner
+    },
   )
 
   const handleCreateClient = async (data: Omit<Client, "id" | "createdAt" | "updatedAt">) => {
     try {
-      setError(null)
       const newClient = await clientStorage.create(data)
       setClients([...clients, newClient])
       setShowForm(false)
+      showSuccessToast("Cliente cadastrado com sucesso.")
     } catch (error) {
       console.error("Erro ao criar cliente:", error)
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido ao criar cliente"
-
-      setError(errorMessage)
+      showErrorToast(errorMessage)
 
       if (errorMessage.includes("email")) {
         const existingClient = clients.find((c) => c.email === data.email)
@@ -69,41 +82,39 @@ export default function ClientsPage() {
   const handleUpdateClient = async (data: Omit<Client, "id" | "createdAt" | "updatedAt">) => {
     if (!editingClient) return
     try {
-      setError(null)
       const updated = await clientStorage.update(editingClient.id, data)
       if (updated) {
         setClients(clients.map((c) => (c.id === editingClient.id ? updated : c)))
         setEditingClient(null)
         setShowForm(false)
+        showSuccessToast("Cliente atualizado com sucesso.")
       }
     } catch (error) {
       console.error("Erro ao atualizar cliente:", error)
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido ao atualizar cliente"
-      setError(errorMessage)
+      showErrorToast(errorMessage)
     }
   }
 
   const handleDeleteClient = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este cliente?")) {
-      try {
-        await clientStorage.delete(id)
-        setClients(clients.filter((c) => c.id !== id))
-      } catch (error) {
-        console.error("Erro ao excluir cliente:", error)
-      }
+    try {
+      await clientStorage.delete(id)
+      setClients(clients.filter((c) => c.id !== id))
+      showSuccessToast("Cliente excluído com sucesso.")
+    } catch (error) {
+      console.error("Erro ao excluir cliente:", error)
+      showErrorToast("Erro ao excluir cliente.")
     }
   }
 
   const handleEdit = (client: Client) => {
     setEditingClient(client)
     setShowForm(true)
-    setError(null)
   }
 
   const handleCloseForm = () => {
     setShowForm(false)
     setEditingClient(null)
-    setError(null)
   }
 
   if (loading) {
@@ -130,16 +141,9 @@ export default function ClientsPage() {
         </Button>
       </div>
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
       {/* Barra de busca */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
@@ -149,6 +153,24 @@ export default function ClientsPage() {
               className="pl-10"
             />
           </div>
+          {isAdmin && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-600">Filtrar por usuário</p>
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os usuários" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os usuários</SelectItem>
+                  {owners.map((owner) => (
+                    <SelectItem key={owner.id} value={owner.id}>
+                      {owner.fullName || owner.email || owner.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -174,6 +196,11 @@ export default function ClientsPage() {
                       <p>Telefone: {client.phone}</p>
                       <p>CPF/CNPJ: {client.cpfCnpj}</p>
                       <p>Endereço: {client.address}</p>
+                      {isAdmin && (
+                        <p className="text-xs text-gray-500">
+                          Criado por: {getOwnerLabel(client.userId) ?? "Desconhecido"}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">

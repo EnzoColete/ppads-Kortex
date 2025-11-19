@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+ï»¿#!/usr/bin/env node
 /**
  * Bootstrap default auth users (cliente e admin) no Supabase Auth e na tabela public.users.
  */
@@ -22,13 +22,13 @@ const seeds = [
     email: (process.env.DEFAULT_CLIENT_EMAIL || "cliente@exemplo.com").toLowerCase(),
     password: process.env.DEFAULT_CLIENT_PASSWORD || "Zp4!r9LmQ#2s",
     fullName: process.env.DEFAULT_CLIENT_NAME || "Cliente Exemplo",
-    role: "client",
+    role: "USER",
   },
   {
     email: (process.env.DEFAULT_ADMIN_EMAIL || "admin@exemplo.com").toLowerCase(),
     password: process.env.DEFAULT_ADMIN_PASSWORD || "Adm1n!#2024",
     fullName: process.env.DEFAULT_ADMIN_NAME || "Administrador do Sistema",
-    role: "admin",
+    role: "ADMIN",
   },
 ]
 
@@ -48,7 +48,7 @@ async function ensureUsersTable() {
       email text UNIQUE NOT NULL,
       full_name text NOT NULL,
       password_hash text NOT NULL,
-      role text NOT NULL CHECK (role IN ('admin','technician','client')),
+      role text NOT NULL CHECK (role IN ('ADMIN','USER')) DEFAULT 'USER',
       email_verified boolean DEFAULT false,
       verification_token text,
       verification_expires_at timestamptz,
@@ -82,7 +82,7 @@ async function ensureAuthUser({ email, password, fullName }) {
 
   const existing = data?.users?.find((user) => user.email?.toLowerCase() === email)
   if (existing) {
-    console.log(`? Usuário ${email} já existe. Atualizando senha e marcando como confirmado.`)
+    console.log(`? Usuï¿½rio ${email} jï¿½ existe. Atualizando senha e marcando como confirmado.`)
     const { error: updateError } = await authClient.auth.admin.updateUserById(existing.id, {
       password,
       email_confirm: false,
@@ -92,7 +92,7 @@ async function ensureAuthUser({ email, password, fullName }) {
     return existing
   }
 
-  console.log(`? Criando usuário ${email}.`)
+  console.log(`? Criando usuï¿½rio ${email}.`)
   const { data: created, error: createError } = await authClient.auth.admin.createUser({
     email,
     password,
@@ -128,14 +128,14 @@ async function run() {
     console.log(`\n??  Processando ${seed.email}`)
     const authUser = await ensureAuthUser(seed)
     await upsertUserRecord(authUser, seed)
-    console.log(`? Usuário ${seed.email} pronto.`)
+    console.log(`? Usuï¿½rio ${seed.email} pronto.`)
   }
 }
 
 run()
   .then(async () => {
     await pgClient.end()
-    console.log("\n?? Bootstrap concluído. Agora você pode fazer login com as credenciais configuradas.")
+    console.log("\n?? Bootstrap concluï¿½do. Agora vocï¿½ pode fazer login com as credenciais configuradas.")
     process.exit(0)
   })
   .catch(async (error) => {
@@ -143,3 +143,6 @@ run()
     console.error(`\n? Falha ao executar bootstrap: ${error.message}`)
     process.exit(1)
   })
+
+
+

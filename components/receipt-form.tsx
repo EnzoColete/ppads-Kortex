@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { X, Plus, Trash2 } from "lucide-react"
 import type { Receipt, Supplier, Client, Product, ReceiptProduct } from "@/lib/types"
+import { showErrorToast } from "@/lib/toast"
 
 interface ReceiptFormProps {
   suppliers: Supplier[]
@@ -83,18 +84,18 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
     e.preventDefault()
 
     if (formData.type === "client" && !formData.clientId) {
-      alert("Selecione um cliente para continuar.")
+      showErrorToast("Selecione um cliente para continuar.")
       return
     }
 
     if (formData.type === "supplier" && !formData.supplierId) {
-      alert("Selecione um fornecedor para continuar.")
+      showErrorToast("Selecione um fornecedor para continuar.")
       return
     }
 
     const validProducts = receiptProducts.filter((p) => p.productId && p.quantity > 0)
     if (validProducts.length === 0) {
-      alert("Adicione pelo menos um produto ao recibo.")
+      showErrorToast("Adicione pelo menos um produto ao recibo.")
       return
     }
 
@@ -294,4 +295,3 @@ export function ReceiptForm({ suppliers, clients, products, onSubmit, onCancel }
     </div>
   )
 }
-

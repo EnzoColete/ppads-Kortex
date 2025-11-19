@@ -34,7 +34,7 @@ const COLUMN_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
 async function requireAdmin(): Promise<NextResponse | null> {
   const user = await getCurrentUser()
-  if (!user || user.role !== "admin") {
+  if (!user || (user.role ?? "").toUpperCase() !== "ADMIN") {
     return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
   }
   return null

@@ -1,8 +1,7 @@
-
-import { NextResponse } from "next/server"
+﻿import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getCurrentUser } from "@/lib/auth"
-import { requirePermission } from "@/lib/rbac"
+import { logApiRequest, logApiResponse, logApiError } from "@/lib/api-logger"
 import { serviceOrdersRepository } from "@/lib/server/service-orders-repository"
 
 const serviceOrderSchema = z
@@ -47,47 +46,78 @@ const serviceOrderSchema = z
     orderNumber: data.orderNumber ?? `OS-${Date.now()}`,
   }))
 
+function isAdmin(role?: string | null) {
+  return (role ?? "").toUpperCase() === "ADMIN"
+}
+
+function unauthorized(message = "Acesso negado: faca login para acessar ordens de servico.") {
+  return NextResponse.json({ error: message }, { status: 401 })
+}
+
 export async function GET(request: Request) {
+  const { startTime } = await logApiRequest(request)
+
   try {
     const currentUser = await getCurrentUser()
-    const normalizedRole = currentUser?.role?.trim().toLowerCase()
-
-    if (!currentUser || normalizedRole !== "client") {
-      await requirePermission("service_orders", "read")
+    if (!currentUser) {
+      logApiResponse("GET", "/api/service-orders", 401, startTime)
+      return unauthorized()
     }
 
-    const orders = await serviceOrdersRepository.getAll()
+    const admin = isAdmin(currentUser.role)
+    const url = new URL(request.url)
+    const requestedUserId = admin ? url.searchParams.get("userId") : null
+    const filterUserId = requestedUserId && requestedUserId.trim().length > 0 ? requestedUserId : undefined
+
+    const orders = await serviceOrdersRepository.getAll({
+      userId: currentUser.id,
+      isAdmin: admin,
+      filterUserId,
+    })
+
+    logApiResponse("GET", "/api/service-orders", 200, startTime)
     return NextResponse.json({ data: orders })
   } catch (error) {
     console.error("GET /api/service-orders failed:", error)
+    logApiError("GET", "/api/service-orders", error as Error)
     const message = error instanceof Error ? error.message : "Failed to fetch service orders"
-    const status = message.toLowerCase().includes("acesso negado") ? 403 : 500
+    const lowered = message.toLowerCase()
+    const status = lowered.includes("acesso negado") ? 403 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }
 
 export async function POST(request: Request) {
+  const { startTime } = await logApiRequest(request)
+
   try {
     const currentUser = await getCurrentUser()
     if (!currentUser) {
-      return NextResponse.json({ error: "Acesso negado: faca login para criar ordens de servico." }, { status: 401 })
+      logApiResponse("POST", "/api/service-orders", 401, startTime)
+      return unauthorized()
     }
 
     const body = await request.json()
     const parsed = serviceOrderSchema.safeParse(body)
 
     if (!parsed.success) {
+      logApiResponse("POST", "/api/service-orders", 400, startTime)
       return NextResponse.json(
         { error: "Payload invalido.", details: parsed.error.flatten() },
         { status: 400 },
       )
     }
 
-    const order = await serviceOrdersRepository.create(parsed.data)
+    const order = await serviceOrdersRepository.create(parsed.data, {
+      userId: currentUser.id,
+      isAdmin: isAdmin(currentUser.role),
+    })
 
+    logApiResponse("POST", "/api/service-orders", 201, startTime)
     return NextResponse.json({ data: order }, { status: 201 })
   } catch (error) {
     console.error("POST /api/service-orders failed:", error)
+    logApiError("POST", "/api/service-orders", error as Error)
     const message = error instanceof Error ? error.message : "Failed to create service order"
     const lowered = message.toLowerCase()
     let status = 500

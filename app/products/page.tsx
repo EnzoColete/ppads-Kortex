@@ -8,6 +8,9 @@ import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { productStorage } from "@/lib/storage"
 import type { Product } from "@/lib/types"
 import { ProductForm } from "@/components/product-form"
+import { useOwnerDirectory } from "@/hooks/use-owner-directory"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -15,6 +18,14 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
+  const [ownerFilter, setOwnerFilter] = useState("all")
+  const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setOwnerFilter("all")
+    }
+  }, [isAdmin])
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -23,6 +34,7 @@ export default function ProductsPage() {
         setProducts(data)
       } catch (error) {
         console.error("Error loading products:", error)
+        showErrorToast("Erro ao carregar produtos.")
       } finally {
         setLoading(false)
       }
@@ -30,20 +42,24 @@ export default function ProductsPage() {
     loadProducts()
   }, [])
 
-  const filteredProducts = products.filter(
-    (product) =>
+  const filteredProducts = products.filter((product) => {
+    const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.unit.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+      product.unit.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesOwner = !isAdmin || ownerFilter === "all" || product.userId === ownerFilter
+    return matchesSearch && matchesOwner
+  })
 
   const handleCreateProduct = async (data: Omit<Product, "id" | "createdAt" | "updatedAt">) => {
     try {
       const newProduct = await productStorage.create(data)
       setProducts([...products, newProduct])
       setShowForm(false)
+      showSuccessToast("Produto cadastrado com sucesso.")
     } catch (error) {
       console.error("Error creating product:", error)
+      showErrorToast("Erro ao criar produto.")
     }
   }
 
@@ -55,20 +71,22 @@ export default function ProductsPage() {
         setProducts(products.map((p) => (p.id === editingProduct.id ? updated : p)))
         setEditingProduct(null)
         setShowForm(false)
+        showSuccessToast("Produto atualizado com sucesso.")
       }
     } catch (error) {
       console.error("Error updating product:", error)
+      showErrorToast("Erro ao atualizar produto.")
     }
   }
 
   const handleDeleteProduct = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este produto?")) {
-      try {
-        await productStorage.delete(id)
-        setProducts(products.filter((p) => p.id !== id))
-      } catch (error) {
-        console.error("Error deleting product:", error)
-      }
+    try {
+      await productStorage.delete(id)
+      setProducts(products.filter((p) => p.id !== id))
+      showSuccessToast("Produto excluído com sucesso.")
+    } catch (error) {
+      console.error("Error deleting product:", error)
+      showErrorToast("Erro ao excluir produto.")
     }
   }
 
@@ -100,7 +118,7 @@ export default function ProductsPage() {
       </div>
 
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
@@ -110,6 +128,24 @@ export default function ProductsPage() {
               className="pl-10"
             />
           </div>
+          {isAdmin && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-600">Filtrar por usuário</p>
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os usuários" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os usuários</SelectItem>
+                  {owners.map((owner) => (
+                    <SelectItem key={owner.id} value={owner.id}>
+                      {owner.fullName || owner.email || owner.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -174,6 +210,11 @@ export default function ProductsPage() {
                         <p>
                           Unidade: <span className="font-medium">{product.unit}</span>
                         </p>
+                      {isAdmin && (
+                        <p className="text-xs text-gray-500">
+                          Criado por: {getOwnerLabel(product.userId) ?? "Desconhecido"}
+                        </p>
+                      )}
                       </div>
                     </div>
                   </div>

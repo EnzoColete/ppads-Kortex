@@ -10,9 +10,10 @@ interface ServiceOrderViewProps {
   clients: Client[]
   products: Product[]
   onClose: () => void
+  ownerLabel?: string
 }
 
-export function ServiceOrderView({ order, clients, products, onClose }: ServiceOrderViewProps) {
+export function ServiceOrderView({ order, clients, products, onClose, ownerLabel }: ServiceOrderViewProps) {
   const client = clients.find((c) => c.id === order.clientId)
 
   const getStatusLabel = (status: string) => {
@@ -46,6 +47,7 @@ export function ServiceOrderView({ order, clients, products, onClose }: ServiceO
           </Button>
         </CardHeader>
         <CardContent className="space-y-6">
+          {ownerLabel && <p className="text-xs text-gray-500">Criado por: {ownerLabel}</p>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600">Cliente</p>

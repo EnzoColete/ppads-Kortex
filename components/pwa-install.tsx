@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Download, X, Smartphone } from "lucide-react"
+import { showInfoToast } from "@/lib/toast"
 
 export function PWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
@@ -71,7 +72,9 @@ export function PWAInstall() {
     if (!deferredPrompt) {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
       if (isIOS) {
-        alert('Para instalar no iOS: Toque no ícone de compartilhar e selecione "Adicionar à Tela de Início"')
+        showInfoToast('Para instalar no iOS: toque em compartilhar e selecione "Adicionar à Tela de Início".', {
+          duration: 6000,
+        })
         setShowInstall(false)
         return
       }

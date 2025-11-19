@@ -3,6 +3,12 @@ import type { ServiceOrder, ServiceOrderItem } from "@/lib/types"
 import { ensureServiceOrdersSchema } from "@/lib/server/ensure-service-orders"
 import { getPool } from "@/lib/server/db"
 
+type OwnershipContext = {
+  userId: string
+  isAdmin: boolean
+  filterUserId?: string | null
+}
+
 const mapNumeric = (value: any): number => {
   if (value === null || value === undefined) return 0
   if (typeof value === "number") return value
@@ -59,6 +65,7 @@ const mapOrderRow = (row: any, items: ServiceOrderItem[]): ServiceOrder => ({
   completedDate: mapDateValue(row.completed_date),
   totalValue: mapNumeric(row.total_value),
   notes: row.notes ?? undefined,
+  userId: row.user_id,
   items,
   createdAt: new Date(row.created_at),
   updatedAt: new Date(row.updated_at),
@@ -148,11 +155,23 @@ async function fetchItems(client: PoolClient, orderIds: string[]): Promise<Map<s
 }
 
 export const serviceOrdersRepository = {
-  async getAll(): Promise<ServiceOrder[]> {
+  async getAll(context: OwnershipContext): Promise<ServiceOrder[]> {
     await ensureServiceOrdersSchema()
 
     return withConnection(async (client) => {
-      const { rows } = await client.query(`
+      const params: any[] = []
+      let whereClause = ""
+
+      if (!context.isAdmin) {
+        whereClause = "WHERE user_id = $1::uuid"
+        params.push(context.userId)
+      } else if (context.filterUserId) {
+        whereClause = "WHERE user_id = $1::uuid"
+        params.push(context.filterUserId)
+      }
+
+      const { rows } = await client.query(
+        `
         SELECT id,
                order_number,
                client_id,
@@ -166,10 +185,14 @@ export const serviceOrdersRepository = {
                total_value,
                notes,
                created_at,
-               updated_at
+               updated_at,
+               user_id
           FROM public.service_orders
+          ${whereClause}
          ORDER BY created_at DESC
-      `)
+      `,
+        params,
+      )
 
       const orderIds = rows.map((row) => row.id)
       const itemsByOrder = await fetchItems(client, orderIds)
@@ -178,7 +201,7 @@ export const serviceOrdersRepository = {
     })
   },
 
-  async getById(id: string): Promise<ServiceOrder | undefined> {
+  async getById(id: string, context: OwnershipContext): Promise<ServiceOrder | undefined> {
     await ensureServiceOrdersSchema()
 
     return withConnection(async (client) => {
@@ -197,7 +220,8 @@ export const serviceOrdersRepository = {
                  total_value,
                  notes,
                  created_at,
-                 updated_at
+                 updated_at,
+                 user_id
             FROM public.service_orders
            WHERE id = $1::uuid
         `,
@@ -206,13 +230,17 @@ export const serviceOrdersRepository = {
 
       if (rows.length === 0) return undefined
 
+      if (!context.isAdmin && rows[0].user_id !== context.userId) {
+        return undefined
+      }
+
       const itemsByOrder = await fetchItems(client, [id])
 
       return mapOrderRow(rows[0], itemsByOrder.get(id) ?? [])
     })
   },
 
-  async create(order: Omit<ServiceOrder, "id" | "createdAt" | "updatedAt">): Promise<ServiceOrder> {
+  async create(order: Omit<ServiceOrder, "id" | "createdAt" | "updatedAt">, context: OwnershipContext): Promise<ServiceOrder> {
     await ensureServiceOrdersSchema()
 
     return withConnection(async (client) => {
@@ -222,13 +250,16 @@ export const serviceOrdersRepository = {
           throw new Error("Cliente obrigatorio para criar a ordem de servico.")
         }
 
-        const clientCheck = await client.query(
-          "SELECT 1 FROM public.clients WHERE id = $1::uuid LIMIT 1",
+        const clientCheck = await client.query<{ user_id: string }>(
+          "SELECT user_id FROM public.clients WHERE id = $1::uuid LIMIT 1",
           [order.clientId],
         )
 
         if (clientCheck.rowCount === 0) {
           throw new Error("Cliente informado nao existe.")
+        }
+        if (!context.isAdmin && clientCheck.rows[0].user_id !== context.userId) {
+          throw new Error("Cliente informado nao pertence ao usuario autenticado.")
         }
 
         const orderNumber = await ensureUniqueOrderNumber(client, order.orderNumber)
@@ -242,8 +273,8 @@ export const serviceOrdersRepository = {
         )
 
         if (productIds.length > 0) {
-          const { rows: productRows } = await client.query<{ id: string }>(
-            "SELECT id FROM public.products WHERE id = ANY($1::uuid[])",
+          const { rows: productRows } = await client.query<{ id: string; user_id: string }>(
+            "SELECT id, user_id FROM public.products WHERE id = ANY($1::uuid[])",
             [productIds],
           )
 
@@ -253,11 +284,19 @@ export const serviceOrdersRepository = {
           if (missingIds.length > 0) {
             throw new Error(`Produto informado nao existe: ${missingIds.join(", ")}`)
           }
+
+          if (!context.isAdmin) {
+            const unauthorized = productRows.find((row) => row.user_id !== context.userId)
+            if (unauthorized) {
+              throw new Error("Produto informado nao pertence ao usuario autenticado.")
+            }
+          }
         }
 
         const insertOrder = await client.query(
           `
             INSERT INTO public.service_orders (
+              user_id,
               order_number,
               client_id,
               assigned_to,
@@ -270,10 +309,11 @@ export const serviceOrdersRepository = {
               total_value,
               notes
             )
-            VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8::date, $9::date, $10, $11)
+            VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, $9::date, $10::date, $11, $12)
             RETURNING *
           `,
           [
+            context.userId,
             orderNumber,
             toNullableUuid(order.clientId),
             toNullableUuid(order.assignedTo),
@@ -332,10 +372,23 @@ export const serviceOrdersRepository = {
     })
   },
 
-  async update(id: string, updates: Partial<ServiceOrder>): Promise<ServiceOrder | null> {
+  async update(id: string, updates: Partial<ServiceOrder>, context: OwnershipContext): Promise<ServiceOrder | null> {
     await ensureServiceOrdersSchema()
 
     return withConnection(async (client) => {
+      const { rows: ownerRows } = await client.query<{ user_id: string }>(
+        "SELECT user_id FROM public.service_orders WHERE id = $1::uuid",
+        [id],
+      )
+
+      if (ownerRows.length === 0) {
+        return null
+      }
+
+      if (!context.isAdmin && ownerRows[0].user_id !== context.userId) {
+        throw new Error("Acesso negado aos dados da ordem de servico.")
+      }
+
       const fields: string[] = []
       const params: any[] = []
       let index = 1
@@ -386,7 +439,7 @@ export const serviceOrdersRepository = {
       }
 
       if (fields.length === 0) {
-        const existing = await serviceOrdersRepository.getById(id)
+        const existing = await serviceOrdersRepository.getById(id, context)
         return existing ?? null
       }
 
@@ -410,10 +463,23 @@ export const serviceOrdersRepository = {
     })
   },
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, context: OwnershipContext): Promise<boolean> {
     await ensureServiceOrdersSchema()
 
     return withConnection(async (client) => {
+      const { rows } = await client.query<{ user_id: string }>(
+        "SELECT user_id FROM public.service_orders WHERE id = $1::uuid",
+        [id],
+      )
+
+      if (rows.length === 0) {
+        return false
+      }
+
+      if (!context.isAdmin && rows[0].user_id !== context.userId) {
+        throw new Error("Acesso negado aos dados da ordem de servico.")
+      }
+
       const { rowCount } = await client.query(
         "DELETE FROM public.service_orders WHERE id = $1::uuid",
         [id],
@@ -422,10 +488,3 @@ export const serviceOrdersRepository = {
     })
   },
 }
-
-
-
-
-
-
-

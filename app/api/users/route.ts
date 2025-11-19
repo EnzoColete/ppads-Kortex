@@ -5,7 +5,7 @@ import { deleteUserByEmail, listUsers, updateUserByEmail } from "@/lib/server/us
 type MaybeResponse = NextResponse | null
 
 function ensureAdmin(user: Awaited<ReturnType<typeof getCurrentUser>>): MaybeResponse {
-  if (!user || user.role !== "admin") {
+  if (!user || (user.role ?? "").toUpperCase() !== "ADMIN") {
     return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
   }
   return null

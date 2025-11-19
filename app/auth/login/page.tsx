@@ -7,21 +7,18 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import Image from "next/image"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault()
     setIsLoading(true)
-    setError(null)
-
     try {
       const sanitizedEmail = email.trim().toLowerCase()
       const response = await fetch("/api/auth/login", {
@@ -39,10 +36,12 @@ export default function LoginPage() {
         throw new Error(message)
       }
 
+      showSuccessToast("Login realizado com sucesso.")
       router.push("/")
       router.refresh()
     } catch (loginError: unknown) {
-      setError(loginError instanceof Error ? loginError.message : "Erro ao fazer login")
+      const message = loginError instanceof Error ? loginError.message : "Erro ao fazer login"
+      showErrorToast(message)
     } finally {
       setIsLoading(false)
     }
@@ -87,11 +86,6 @@ export default function LoginPage() {
                       disabled={isLoading}
                     />
                   </div>
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Entrando..." : "Entrar"}
                   </Button>

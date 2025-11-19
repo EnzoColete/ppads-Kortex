@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+﻿import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { runQuery } from "@/lib/server/db"
 
 const ALLOWED_COLUMNS = ["name", "description", "price", "unit", "type"] as const
@@ -18,19 +19,17 @@ const mapProductToDb = (product: unknown) => {
 
   const source = product as Record<string, unknown>
   const rawPrice = source.price
-  const normalizedPrice =
-    typeof rawPrice === "string"
-      ? rawPrice.replace(",", ".")
-      : rawPrice
+  const normalizedPrice = typeof rawPrice === "string" ? rawPrice.replace(",", ".") : rawPrice
 
   const mapped: Record<AllowedColumn, unknown> = {
     name: trimValue(source.name) ?? "",
     description: trimValue(source.description) ?? "",
     price: normalizedPrice,
     unit: trimValue(source.unit) ?? "",
-    type: source.type !== undefined && source.type !== null && `${source.type}`.trim().length > 0
-      ? trimValue(source.type)
-      : "other",
+    type:
+      source.type !== undefined && source.type !== null && `${source.type}`.trim().length > 0
+        ? trimValue(source.type)
+        : "other",
   }
 
   if (mapped.price !== undefined && mapped.price !== null) {
@@ -55,6 +54,7 @@ const mapProductFromDb = (product: any) => {
     type: product.type ?? null,
     createdAt: product.created_at,
     updatedAt: product.updated_at,
+    userId: product.user_id ?? null,
   }
 }
 
@@ -64,8 +64,30 @@ function buildInsertPayload(dbProduct: ProductRow) {
   return { columns, values }
 }
 
+function isAdmin(role: string | undefined | null) {
+  return (role ?? "").toUpperCase() === "ADMIN"
+}
+
+function unauthorized() {
+  return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
+}
+
 export async function GET() {
   try {
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      return unauthorized()
+    }
+
+    const admin = isAdmin(currentUser.role)
+    const params: any[] = []
+    let whereClause = ""
+
+    if (!admin) {
+      whereClause = "WHERE user_id = $1::uuid"
+      params.push(currentUser.id)
+    }
+
     const { rows } = await runQuery(
       `
         SELECT id,
@@ -75,10 +97,13 @@ export async function GET() {
                unit,
                type,
                created_at,
-               updated_at
+               updated_at,
+               user_id
           FROM public.products
+          ${whereClause}
          ORDER BY created_at DESC
       `,
+      params,
     )
 
     return NextResponse.json({
@@ -92,6 +117,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      return unauthorized()
+    }
+
     const payload = await request.json()
 
     if (!payload || typeof payload !== "object") {
@@ -117,15 +147,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nenhum campo valido informado." }, { status: 400 })
     }
 
-    const placeholders = columns.map((_, index) => `$${index + 1}`)
+    const placeholders = columns.map((_, index) => `$${index + 2}`)
 
     const insertQuery = `
-      INSERT INTO public.products (${columns.join(", ")})
-      VALUES (${placeholders.join(", ")})
+      INSERT INTO public.products (user_id, ${columns.join(", ")})
+      VALUES ($1::uuid, ${placeholders.join(", ")})
       RETURNING *
     `
 
-    const result = await runQuery(insertQuery, values)
+    const result = await runQuery(insertQuery, [currentUser.id, ...values])
     const data = result.rows[0]
 
     return NextResponse.json({ data: mapProductFromDb(data) }, { status: 201 })

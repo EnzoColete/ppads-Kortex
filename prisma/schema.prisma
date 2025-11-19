@@ -9,58 +9,72 @@ datasource db {
 
 model Supplier {
   id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
   name           String         @db.VarChar(255)
-  email          String         @unique @db.VarChar(255)
+  email          String         @db.VarChar(255)
   phone          String         @db.VarChar(20)
   address        String         @db.Text
-  cnpj           String         @unique @db.VarChar(20)
+  cnpj           String         @db.VarChar(20)
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
   receipts       Receipt[]      @relation("ReceiptSupplier")
   dailyExpenses  DailyExpense[] @relation("DailyExpenseSupplier")
+  owner          User           @relation(fields: [userId], references: [id])
 
   @@map("suppliers")
+  @@index([userId])
   @@index([name])
   @@index([cnpj])
+  @@unique([userId, email])
+  @@unique([userId, cnpj])
 }
 
 model Client {
-  id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name       String           @db.VarChar(255)
-  email      String           @unique @db.VarChar(255)
-  phone      String           @db.VarChar(20)
-  address    String           @db.Text
-  cpfCnpj    String           @unique @map("cpf_cnpj") @db.VarChar(20)
-  latitude   Decimal?         @db.Decimal(10, 8)
-  longitude  Decimal?         @db.Decimal(11, 8)
-  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String           @map("user_id") @db.Uuid
+  name          String           @db.VarChar(255)
+  email         String           @db.VarChar(255)
+  phone         String           @db.VarChar(20)
+  address       String           @db.Text
+  cpfCnpj       String           @map("cpf_cnpj") @db.VarChar(20)
+  latitude      Decimal?         @db.Decimal(10, 8)
+  longitude     Decimal?         @db.Decimal(11, 8)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
   receipts      Receipt[]        @relation("ReceiptClient")
   serviceOrders ServiceOrder[]
+  owner         User             @relation(fields: [userId], references: [id])
 
   @@map("clients")
+  @@index([userId])
   @@index([name])
   @@index([cpfCnpj])
+  @@unique([userId, email])
+  @@unique([userId, cpfCnpj])
 }
 
 model Product {
-  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String            @db.VarChar(255)
-  type        String?           @db.VarChar(30)
-  description String?           @db.Text
-  price       Decimal           @db.Decimal(10, 2)
-  unit        String            @db.VarChar(30)
-  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  receiptItems ReceiptProduct[]
-  serviceOrderItems ServiceOrderItem[]
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String            @map("user_id") @db.Uuid
+  name               String            @db.VarChar(255)
+  type               String?           @db.VarChar(30)
+  description        String?           @db.Text
+  price              Decimal           @db.Decimal(10, 2)
+  unit               String            @db.VarChar(30)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  receiptItems       ReceiptProduct[]
+  serviceOrderItems  ServiceOrderItem[]
+  owner              User              @relation(fields: [userId], references: [id])
 
   @@map("products")
+  @@index([userId])
   @@index([type])
 }
 
 model Receipt {
   id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
   type         ReceiptType
   supplierId   String?       @map("supplier_id") @db.Uuid
   clientId     String?       @map("client_id") @db.Uuid
@@ -75,8 +89,10 @@ model Receipt {
   products     ReceiptProduct[]
   supplier     Supplier?     @relation("ReceiptSupplier", fields: [supplierId], references: [id])
   client       Client?       @relation("ReceiptClient", fields: [clientId], references: [id])
+  owner        User          @relation(fields: [userId], references: [id])
 
   @@map("receipts")
+  @@index([userId])
   @@index([date])
   @@index([type])
   @@index([supplierId])
@@ -100,6 +116,7 @@ model ReceiptProduct {
 
 model DailyExpense {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
   date          DateTime  @db.Date
   category      String    @db.VarChar(100)
   amount        Decimal   @db.Decimal(10, 2)
@@ -109,8 +126,10 @@ model DailyExpense {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   supplier      Supplier? @relation("DailyExpenseSupplier", fields: [supplierId], references: [id])
+  owner         User      @relation(fields: [userId], references: [id])
 
   @@map("daily_expenses")
+  @@index([userId])
   @@index([date])
   @@index([category])
   @@index([supplierId])
@@ -124,10 +143,16 @@ model User {
   emailVerified          Boolean               @default(false) @map("email_verified")
   verificationToken      String?               @map("verification_token") @db.Text
   verificationExpiresAt  DateTime?             @map("verification_expires_at") @db.Timestamptz(6)
-  role                   UserRole
+  role                   UserRole              @default(USER)
   createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
   assignedOrders         ServiceOrder[]        @relation("ServiceOrderAssignee")
+  suppliers              Supplier[]
+  clients                Client[]
+  products               Product[]
+  receipts               Receipt[]
+  dailyExpenses          DailyExpense[]
+  serviceOrders          ServiceOrder[]
 
   @@map("users")
   @@index([role])
@@ -135,6 +160,7 @@ model User {
 
 model ServiceOrder {
   id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String                @map("user_id") @db.Uuid
   orderNumber   String                @unique @map("order_number") @db.VarChar(255)
   clientId      String?               @map("client_id") @db.Uuid
   assignedTo    String?               @map("assigned_to") @db.Uuid
@@ -150,9 +176,11 @@ model ServiceOrder {
   updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
   client        Client?               @relation(fields: [clientId], references: [id])
   assignee      User?                 @relation("ServiceOrderAssignee", fields: [assignedTo], references: [id])
+  owner         User                  @relation(fields: [userId], references: [id])
   items         ServiceOrderItem[]
 
   @@map("service_orders")
+  @@index([userId])
   @@index([clientId])
   @@index([assignedTo])
   @@index([status])
@@ -181,9 +209,8 @@ enum ReceiptType {
 }
 
 enum UserRole {
-  admin
-  technician
-  client
+  ADMIN
+  USER
 }
 
 enum ServiceOrderStatus {

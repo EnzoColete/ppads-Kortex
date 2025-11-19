@@ -12,9 +12,10 @@ interface ReceiptViewProps {
   clients: Client[]
   products: Product[]
   onClose: () => void
+  ownerLabel?: string
 }
 
-export function ReceiptView({ receipt, suppliers, clients, products, onClose }: ReceiptViewProps) {
+export function ReceiptView({ receipt, suppliers, clients, products, onClose, ownerLabel }: ReceiptViewProps) {
   const formatCurrency = (value: number | undefined | null): string => {
     if (value === undefined || value === null || isNaN(value)) {
       return "0,00"
@@ -90,6 +91,7 @@ export function ReceiptView({ receipt, suppliers, clients, products, onClose }: 
             <h1 className="text-2xl font-bold">RECIBO</h1>
             <p className="text-gray-600">#{receipt.id}</p>
             <p className="text-sm text-gray-500">Emitido em: {formatDate(receipt.date || receipt.createdAt)}</p>
+            {ownerLabel && <p className="text-xs text-gray-500 mt-1">Criado por: {ownerLabel}</p>}
           </div>
 
           {/* Informações da entidade */}

@@ -12,6 +12,8 @@ import { Trash2, Plus, FileText, Calendar, Edit2, X } from "lucide-react"
 import type { DailyExpense, Supplier } from "@/lib/types"
 import { getSuppliers, getDailyExpenses, saveDailyExpense, deleteDailyExpense } from "@/lib/storage"
 import { ExpenseReportView } from "@/components/expense-report-view"
+import { useOwnerDirectory } from "@/hooks/use-owner-directory"
+import { showErrorToast, showSuccessToast, showWarningToast } from "@/lib/toast"
 
 const DEFAULT_CATEGORIES = ["Alimentação", "Combustível", "Pedágio", "Fornecedor"]
 
@@ -36,6 +38,9 @@ export default function ExpensesPage() {
     supplierName: "",
     notes: "",
   })
+
+  const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
+  const [ownerFilter, setOwnerFilter] = useState("all")
 
   // Auxiliar tradicional para moeda
   const formatBRL = (n: number) =>
@@ -63,12 +68,19 @@ export default function ExpensesPage() {
         console.error("Erro ao carregar dados:", error)
         setExpenses([])
         setSuppliers([])
+        showErrorToast("Erro ao carregar despesas do dia.")
       } finally {
         setLoading(false)
       }
     }
     loadData()
   }, [])
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setOwnerFilter("all")
+    }
+  }, [isAdmin])
 
   const handleAddCategory = () => {
     const value = newCategory.trim()
@@ -84,7 +96,7 @@ export default function ExpensesPage() {
 
   const handleRemoveCategory = (category: string) => {
     if (DEFAULT_CATEGORIES.includes(category)) {
-      alert("Não é possível remover categorias padrão")
+      showWarningToast("Não é possível remover categorias padrão.")
       return
     }
     const updated = categories.filter((c) => c !== category)
@@ -98,7 +110,7 @@ export default function ExpensesPage() {
     e.preventDefault()
 
     if (!formData.category || !formData.amount || Number.parseFloat(formData.amount) <= 0) {
-      alert("Por favor, preencha a categoria e o valor do gasto.")
+      showWarningToast("Informe categoria e valor do gasto.")
       return
     }
 
@@ -131,22 +143,22 @@ export default function ExpensesPage() {
       })
       setIsFormOpen(false)
 
-      alert("Gasto salvo com sucesso!")
+      showSuccessToast("Gasto salvo com sucesso.")
     } catch (error) {
       console.error("Erro ao salvar gasto:", error)
-      alert(`Erro ao salvar gasto: ${error instanceof Error ? error.message : "Erro desconhecido"}`)
+      showErrorToast(`Erro ao salvar gasto: ${error instanceof Error ? error.message : "Erro desconhecido"}`)
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir este gasto?")) return
-
     try {
       await deleteDailyExpense(id)
       const updatedExpenses = await getDailyExpenses()
       setExpenses(updatedExpenses || [])
+      showSuccessToast("Gasto excluído com sucesso.")
     } catch (error) {
       console.error("Erro ao deletar gasto:", error)
+      showErrorToast("Erro ao excluir gasto diário.")
     }
   }
 
@@ -198,7 +210,9 @@ export default function ExpensesPage() {
       matchesDate = expenseDate >= dateRange.start && expenseDate <= dateRange.end
     }
 
-    return matchesSearch && matchesDate
+    const matchesOwner = !isAdmin || ownerFilter === "all" || expense.userId === ownerFilter
+
+    return matchesSearch && matchesDate && matchesOwner
   })
 
   const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0)
@@ -302,6 +316,24 @@ export default function ExpensesPage() {
                 </div>
               </>
             )}
+            {isAdmin && (
+              <div className="w-full md:w-60">
+                <Label>Usuário</Label>
+                <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos os usuários" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os usuários</SelectItem>
+                    {owners.map((owner) => (
+                      <SelectItem key={owner.id} value={owner.id}>
+                        {owner.fullName || owner.email || owner.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -380,6 +412,11 @@ export default function ExpensesPage() {
                           <span className="text-gray-600">Observações:</span>
                           <span className="ml-2">{expense.observations}</span>
                         </div>
+                      )}
+                      {isAdmin && (
+                        <p className="text-xs text-gray-500">
+                          Criado por: {getOwnerLabel(expense.userId) ?? "Desconhecido"}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -560,3 +597,5 @@ export default function ExpensesPage() {
     </div>
   )
 }
+
+

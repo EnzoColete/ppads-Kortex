@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+﻿import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { runQuery } from "@/lib/server/db"
 
 const ALLOWED_COLUMNS = ["name", "description", "price", "unit", "type"] as const
@@ -13,10 +14,7 @@ const mapProductToDb = (product: unknown) => {
   if (!product || typeof product !== "object") return {}
   const source = product as Record<string, unknown>
   const rawPrice = source.price
-  const normalizedPrice =
-    typeof rawPrice === "string"
-      ? rawPrice.replace(",", ".")
-      : rawPrice
+  const normalizedPrice = typeof rawPrice === "string" ? rawPrice.replace(",", ".") : rawPrice
 
   const mapped: Record<AllowedColumn, unknown> = {
     name: source.name !== undefined ? trimValue(source.name) : undefined,
@@ -53,6 +51,7 @@ const mapProductFromDb = (product: any) => {
     type: product.type ?? null,
     createdAt: product.created_at,
     updatedAt: product.updated_at,
+    userId: product.user_id ?? null,
   }
 }
 
@@ -60,8 +59,21 @@ function pickAllowedColumns(dbProduct: ProductRow) {
   return ALLOWED_COLUMNS.filter((column) => dbProduct[column] !== undefined)
 }
 
+function isAdmin(role?: string | null) {
+  return (role ?? "").toUpperCase() === "ADMIN"
+}
+
+function unauthorized() {
+  return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
+}
+
 export async function GET(_: Request, { params }: Params) {
   try {
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      return unauthorized()
+    }
+
     const { rows } = await runQuery(
       `
         SELECT id,
@@ -71,7 +83,8 @@ export async function GET(_: Request, { params }: Params) {
                unit,
                type,
                created_at,
-               updated_at
+               updated_at,
+               user_id
           FROM public.products
          WHERE id = $1::uuid
          LIMIT 1
@@ -83,6 +96,10 @@ export async function GET(_: Request, { params }: Params) {
       return NextResponse.json({ error: "Produto nao encontrado." }, { status: 404 })
     }
 
+    if (!isAdmin(currentUser.role) && rows[0].user_id !== currentUser.id) {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
+    }
+
     return NextResponse.json({ data: mapProductFromDb(rows[0]) })
   } catch (error) {
     console.error("GET /api/products/[id] failed:", error)
@@ -92,10 +109,28 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      return unauthorized()
+    }
+
     const payload = await request.json()
 
     if (!payload || typeof payload !== "object") {
       return NextResponse.json({ error: "Payload invalido." }, { status: 400 })
+    }
+
+    const { rows: existingRows } = await runQuery<{ user_id: string }>(
+      "SELECT user_id FROM public.products WHERE id = $1::uuid LIMIT 1",
+      [params.id],
+    )
+
+    if (existingRows.length === 0) {
+      return NextResponse.json({ error: "Produto nao encontrado." }, { status: 404 })
+    }
+
+    if (!isAdmin(currentUser.role) && existingRows[0].user_id !== currentUser.id) {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
     }
 
     let dbUpdates: ProductRow
@@ -145,6 +180,24 @@ export async function PATCH(request: Request, { params }: Params) {
 
 export async function DELETE(_: Request, { params }: Params) {
   try {
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      return unauthorized()
+    }
+
+    const { rows } = await runQuery<{ user_id: string }>(
+      "SELECT user_id FROM public.products WHERE id = $1::uuid LIMIT 1",
+      [params.id],
+    )
+
+    if (rows.length === 0) {
+      return NextResponse.json({ error: "Produto nao encontrado." }, { status: 404 })
+    }
+
+    if (!isAdmin(currentUser.role) && rows[0].user_id !== currentUser.id) {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
+    }
+
     const { rowCount } = await runQuery(
       "DELETE FROM public.products WHERE id = $1::uuid",
       [params.id],

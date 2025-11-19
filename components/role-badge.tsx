@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge"
+﻿import { Badge } from "@/components/ui/badge"
 import type { Role } from "@/lib/rbac"
 
 interface RoleBadgeProps {
@@ -7,9 +7,8 @@ interface RoleBadgeProps {
 
 export function RoleBadge({ role }: RoleBadgeProps) {
   const roleConfig: Record<Role, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-    admin: { label: "Administrador", variant: "destructive" },
-    technician: { label: "Técnico", variant: "default" },
-    client: { label: "Cliente", variant: "secondary" },
+    ADMIN: { label: "Administrador", variant: "destructive" },
+    USER: { label: "Usuário", variant: "default" },
   }
 
   const config = roleConfig[role]

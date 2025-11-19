@@ -12,6 +12,8 @@ import type { ServiceOrder, Client, Product } from "@/lib/types"
 import { ServiceOrderForm } from "@/components/service-order-form"
 import { ServiceOrderView } from "@/components/service-order-view"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useOwnerDirectory } from "@/hooks/use-owner-directory"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
 
 export default function ServiceOrdersPage() {
   const [orders, setOrders] = useState<ServiceOrder[]>([])
@@ -26,7 +28,15 @@ export default function ServiceOrdersPage() {
   const [errorDialog, setErrorDialog] = useState<ErrorDialogState | null>(null)
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
+  const [ownerFilter, setOwnerFilter] = useState("all")
   const itemsPerPage = 10
+  const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setOwnerFilter("all")
+    }
+  }, [isAdmin])
 
   useEffect(() => {
     loadData()
@@ -69,8 +79,9 @@ export default function ServiceOrdersPage() {
 
     const matchesStatus = statusFilter === "all" || order.status === statusFilter
     const matchesPriority = priorityFilter === "all" || order.priority === priorityFilter
+    const matchesOwner = !isAdmin || ownerFilter === "all" || order.userId === ownerFilter
 
-    return matchesSearch && matchesStatus && matchesPriority
+    return matchesSearch && matchesStatus && matchesPriority && matchesOwner
   })
 
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
@@ -82,10 +93,11 @@ export default function ServiceOrdersPage() {
       setOrders([newOrder, ...orders])
       setShowForm(false)
       setEditingOrder(null)
+      showSuccessToast("Ordem de serviço cadastrada com sucesso.")
     } catch (error) {
       console.error("Error creating order:", error)
       const message = error instanceof Error ? error.message : "Erro ao criar ordem de servico"
-      alert(message)
+      showErrorToast(message)
     }
   }
 
@@ -98,22 +110,22 @@ export default function ServiceOrdersPage() {
         setOrders(orders.map((o) => (o.id === editingOrder.id ? updated : o)))
         setShowForm(false)
         setEditingOrder(null)
+        showSuccessToast("Ordem de serviço atualizada com sucesso.")
       }
     } catch (error) {
       console.error("Error updating order:", error)
-      alert("Erro ao atualizar ordem de servico")
+      showErrorToast("Erro ao atualizar ordem de serviço.")
     }
   }
 
   const handleDeleteOrder = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta ordem de servico?")) {
-      try {
-        await serviceOrderStorage.delete(id)
-        setOrders(orders.filter((o) => o.id !== id))
-      } catch (error) {
-        console.error("Error deleting order:", error)
-        alert("Erro ao excluir ordem de servico")
-      }
+    try {
+      await serviceOrderStorage.delete(id)
+      setOrders(orders.filter((o) => o.id !== id))
+      showSuccessToast("Ordem de serviço excluída com sucesso.")
+    } catch (error) {
+      console.error("Error deleting order:", error)
+      showErrorToast("Erro ao excluir ordem de serviço.")
     }
   }
 
@@ -229,7 +241,7 @@ export default function ServiceOrdersPage() {
       {/* Filtros */}
       <Card >
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 ${isAdmin ? "md:grid-cols-4" : "md:grid-cols-3"} gap-4`}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
@@ -265,6 +277,21 @@ export default function ServiceOrdersPage() {
                 <SelectItem value="urgent">Urgente</SelectItem>
               </SelectContent>
             </Select>
+            {isAdmin && (
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por usuário" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os usuários</SelectItem>
+                  {owners.map((owner) => (
+                    <SelectItem key={owner.id} value={owner.id}>
+                      {owner.fullName || owner.email || owner.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -314,6 +341,11 @@ export default function ServiceOrdersPage() {
                       <p className="text-xs text-gray-500">
                         Criada em: {new Date(order.createdAt).toLocaleDateString("pt-BR")}
                       </p>
+                      {isAdmin && (
+                        <p className="text-xs text-gray-500">
+                          Criado por: {getOwnerLabel(order.userId) ?? "Desconhecido"}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -390,12 +422,10 @@ export default function ServiceOrdersPage() {
           clients={clients}
           products={products}
           onClose={() => setViewingOrder(null)}
+          ownerLabel={isAdmin ? getOwnerLabel(viewingOrder.userId) : undefined}
         />
       )}
       </div>
     </>
   )
 }
-
-
-

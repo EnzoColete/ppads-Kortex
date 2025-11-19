@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       email: sanitizedEmail,
       fullName: trimmedName,
       password,
-      role: "client",
+      role: "USER",
       emailVerified: false,
     })
 

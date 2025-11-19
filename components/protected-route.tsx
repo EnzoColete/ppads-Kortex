@@ -26,6 +26,8 @@ export function ProtectedRoute({ children, allowedRoles, fallback }: ProtectedRo
       const response = await fetch("/api/auth/me", {
         method: "GET",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        cache: "no-store",
       })
 
       const payload = await response.json().catch(() => ({ user: null }))
@@ -36,7 +38,8 @@ export function ProtectedRoute({ children, allowedRoles, fallback }: ProtectedRo
         return
       }
 
-      const role = user.role as Role
+      const normalizedRole = (user.role ?? "").trim().toUpperCase() as Role
+      const role = normalizedRole
       setUserRole(role)
 
       if (allowedRoles && !allowedRoles.includes(role)) {

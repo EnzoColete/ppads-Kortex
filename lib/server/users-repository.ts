@@ -23,7 +23,7 @@ async function ensureUsersTable() {
       email text UNIQUE NOT NULL,
       full_name text NOT NULL,
       password_hash text NOT NULL,
-      role text NOT NULL CHECK (role IN ('admin','technician','client')),
+      role text NOT NULL CHECK (role IN ('ADMIN','USER')) DEFAULT 'USER',
       email_verified boolean NOT NULL DEFAULT false,
       verification_token text,
       verification_expires_at timestamptz,
@@ -65,18 +65,20 @@ export type PublicUser = {
   id: string
   email: string
   fullName: string
-  role: "admin" | "technician" | "client"
+  role: "ADMIN" | "USER"
   emailVerified: boolean
   createdAt: Date
   updatedAt: Date
 }
 
 function mapRow(row: UserRow): PublicUser {
+  const normalizedRole = (row.role || "").toUpperCase()
+  const role: PublicUser["role"] = normalizedRole === "ADMIN" ? "ADMIN" : "USER"
   return {
     id: row.id,
     email: row.email,
     fullName: row.full_name,
-    role: row.role as PublicUser["role"],
+    role,
     emailVerified: Boolean(row.email_verified),
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
@@ -107,13 +109,13 @@ export async function createUser(params: {
   email: string
   fullName: string
   password: string
-  role?: "admin" | "technician" | "client"
+  role?: "ADMIN" | "USER"
   emailVerified?: boolean
 }) {
   await ensureUsersTable()
 
   const passwordHash = await bcrypt.hash(params.password, 12)
-  const role = params.role ?? "client"
+  const role = (params.role ?? "USER").toUpperCase()
   const emailVerified = Boolean(params.emailVerified)
 
   const { rows } = await runQuery<UserRow>(
@@ -142,7 +144,7 @@ export async function updateUserByEmail(email: string, updates: { fullName?: str
 
   if (updates.role !== undefined) {
     fields.push(`role = $${index++}`)
-    values.push(updates.role)
+    values.push(updates.role.toUpperCase())
   }
 
   if (fields.length === 0) {

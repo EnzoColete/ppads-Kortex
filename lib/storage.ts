@@ -14,6 +14,11 @@ import type {
 import { supabase } from "./supabase/client"
 import { logger } from "./logger"
 
+
+const apiFetch = (input: RequestInfo | URL, init?: RequestInit) => {
+  return fetch(input, { credentials: "include", ...init })
+}
+
 const mapClientToDb = (client: any) => {
   const { cpfCnpj, ...rest } = client
   return {
@@ -23,10 +28,12 @@ const mapClientToDb = (client: any) => {
 }
 
 const mapClientFromDb = (client: any) => {
-  const { cpf_cnpj, ...rest } = client
+  const { cpf_cnpj, user_id, userId, owner, ...rest } = client
   return {
     ...rest,
     cpfCnpj: cpf_cnpj,
+    userId: userId ?? user_id ?? "",
+    owner,
   }
 }
 
@@ -63,6 +70,8 @@ const mapProductFromApi = (product: any): Product => ({
   price: typeof product.price === "number" ? product.price : Number(product.price ?? 0),
   unit: product.unit ?? "",
   type: product.type ?? undefined,
+  userId: product.userId ?? product.user_id ?? "",
+  owner: product.owner,
   createdAt: product.createdAt ? new Date(product.createdAt) : product.created_at ? new Date(product.created_at) : new Date(),
   updatedAt: product.updatedAt ? new Date(product.updatedAt) : product.updated_at ? new Date(product.updated_at) : new Date(),
 })
@@ -70,97 +79,102 @@ const mapProductFromApi = (product: any): Product => ({
 // Suppliers
 export const supplierStorage = {
   getAll: async (): Promise<Supplier[]> => {
-    const startTime = Date.now()
     try {
-      const { data, error } = await supabase.from("suppliers").select("*").order("created_at", { ascending: false })
+      const response = await apiFetch("/api/suppliers")
+      const payload = await safeParseJson(response)
 
-      logger.logDatabaseQuery("SELECT", "suppliers", Date.now() - startTime, {
-        count: data?.length || 0,
-      })
-
-      if (error) {
-        logger.error("Error fetching suppliers", error)
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return []
+        }
+        const message = payload?.error || "Erro ao listar fornecedores."
+        console.error(message)
         return []
       }
 
-      return data || []
+      return Array.isArray(payload?.data) ? payload.data : []
     } catch (error) {
-      logger.error("Error connecting to database", error as Error, { table: "suppliers" })
+      console.error("Error fetching suppliers:", error)
       return []
     }
   },
 
   getById: async (id: string): Promise<Supplier | undefined> => {
-    const startTime = Date.now()
-    const { data, error } = await supabase.from("suppliers").select("*").eq("id", id).single()
+    try {
+      const response = await apiFetch(`/api/suppliers/${id}`)
+      const payload = await safeParseJson(response)
 
-    logger.logDatabaseQuery("SELECT", "suppliers", Date.now() - startTime, { id })
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          if (response.status !== 404) {
+            console.error("Error fetching supplier:", payload?.error)
+          }
+          return undefined
+        }
+        if (response.status !== 404) {
+          console.error("Error fetching supplier:", payload?.error)
+        }
+        return undefined
+      }
 
-    if (error) {
-      logger.error("Error fetching supplier", error, { id })
+      return payload?.data as Supplier
+    } catch (error) {
+      console.error("Error fetching supplier:", error)
       return undefined
     }
-
-    return data
   },
 
   create: async (supplier: Omit<Supplier, "id" | "createdAt" | "updatedAt">): Promise<Supplier> => {
-    const startTime = Date.now()
-    try {
-      const { data, error } = await supabase.from("suppliers").insert([supplier]).select().single()
+    const response = await apiFetch("/api/suppliers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(supplier),
+    })
 
-      logger.logDatabaseQuery("INSERT", "suppliers", Date.now() - startTime)
-
-      if (error) {
-        logger.error("Error creating supplier", error)
-        throw new Error("Não foi possível criar o fornecedor. Verifique se o Supabase está configurado.")
-      }
-
-      logger.logBusinessEvent("supplier_created", {
-        supplierId: data.id,
-        name: data.name,
-      })
-
-      return data
-    } catch (error) {
-      logger.error("Error creating supplier", error as Error)
-      throw new Error("Erro de conexão com o banco de dados.")
+    const payload = await safeParseJson(response)
+    if (!response.ok) {
+      const message = payload?.error || "Erro ao criar fornecedor."
+      throw new Error(message)
     }
+
+    return payload?.data as Supplier
   },
 
   update: async (id: string, updates: Partial<Supplier>): Promise<Supplier | null> => {
-    const startTime = Date.now()
-    const { data, error } = await supabase.from("suppliers").update(updates).eq("id", id).select().single()
+    try {
+      const response = await apiFetch(`/api/suppliers/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
 
-    logger.logDatabaseQuery("UPDATE", "suppliers", Date.now() - startTime, { id })
+      const payload = await safeParseJson(response)
 
-    if (error) {
-      logger.error("Error updating supplier", error, { id })
+      if (!response.ok) {
+        const message = payload?.error || "Erro ao atualizar fornecedor."
+        throw new Error(message)
+      }
+
+      return payload?.data as Supplier
+    } catch (error) {
+      console.error("Error updating supplier:", error)
       return null
     }
-
-    logger.logBusinessEvent("supplier_updated", {
-      supplierId: id,
-      changes: Object.keys(updates),
-    })
-
-    return data
   },
 
   delete: async (id: string): Promise<boolean> => {
-    const startTime = Date.now()
-    const { error } = await supabase.from("suppliers").delete().eq("id", id)
-
-    logger.logDatabaseQuery("DELETE", "suppliers", Date.now() - startTime, { id })
-
-    if (error) {
-      logger.error("Error deleting supplier", error, { id })
+    try {
+      const response = await apiFetch(`/api/suppliers/${id}`, { method: "DELETE" })
+      if (!response.ok) {
+        const payload = await safeParseJson(response)
+        const message = payload?.error || "Erro ao excluir fornecedor."
+        throw new Error(message)
+      }
+      return true
+    } catch (error) {
+      console.error("Error deleting supplier:", error)
       return false
     }
-
-    logger.logBusinessEvent("supplier_deleted", { supplierId: id })
-
-    return true
   },
 }
 
@@ -168,12 +182,16 @@ export const supplierStorage = {
 export const clientStorage = {
   getAll: async (): Promise<Client[]> => {
     try {
-      const response = await fetch("/api/clients", { method: "GET" })
+      const response = await apiFetch("/api/clients", { method: "GET" })
       const payload = await safeParseJson(response)
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return []
+        }
         const message = payload?.error || "Erro ao listar clientes."
-        throw new Error(message)
+        console.error(message)
+        return []
       }
 
       const rows = Array.isArray(payload?.data) ? payload.data : []
@@ -186,14 +204,18 @@ export const clientStorage = {
 
   getById: async (id: string): Promise<Client | undefined> => {
     try {
-      const response = await fetch(`/api/clients/${id}`, { method: "GET" })
+      const response = await apiFetch(`/api/clients/${id}`, { method: "GET" })
       const payload = await safeParseJson(response)
 
       if (!response.ok) {
-        const message = payload?.error
-        if (response.status !== 404) {
-          console.error("Error fetching client:", message)
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          if (response.status !== 404) {
+            console.error("Error fetching client:", payload?.error)
+          }
+          return undefined
         }
+
+        const message = payload?.error
         return undefined
       }
 
@@ -205,7 +227,7 @@ export const clientStorage = {
   },
 
   create: async (client: Omit<Client, "id" | "createdAt" | "updatedAt">): Promise<Client> => {
-    const response = await fetch("/api/clients", {
+    const response = await apiFetch("/api/clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(client),
@@ -222,7 +244,7 @@ export const clientStorage = {
 
   update: async (id: string, updates: Partial<Client>): Promise<Client | null> => {
     try {
-      const response = await fetch(`/api/clients/${id}`, {
+      const response = await apiFetch(`/api/clients/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -244,7 +266,7 @@ export const clientStorage = {
 
   delete: async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/clients/${id}`, { method: "DELETE" })
+      const response = await apiFetch(`/api/clients/${id}`, { method: "DELETE" })
       if (!response.ok) {
         const payload = await safeParseJson(response)
         const message = payload?.error || "Erro ao excluir cliente."
@@ -263,12 +285,16 @@ export const clientStorage = {
 export const productStorage = {
   getAll: async (): Promise<Product[]> => {
     try {
-      const response = await fetch("/api/products")
+      const response = await apiFetch("/api/products")
       const payload = await safeParseJson(response)
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return []
+        }
         const message = payload?.error || "Erro ao listar produtos."
-        throw new Error(message)
+        console.error(message)
+        return []
       }
 
       const rows = Array.isArray(payload?.data) ? payload.data : []
@@ -281,10 +307,16 @@ export const productStorage = {
 
   getById: async (id: string): Promise<Product | undefined> => {
     try {
-      const response = await fetch(`/api/products/${id}`)
+      const response = await apiFetch(`/api/products/${id}`)
       const payload = await safeParseJson(response)
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          if (response.status !== 404) {
+            console.error("Error fetching product:", payload?.error)
+          }
+          return undefined
+        }
         if (response.status !== 404) {
           console.error("Error fetching product:", payload?.error)
         }
@@ -300,7 +332,7 @@ export const productStorage = {
 
   create: async (product: Omit<Product, "id" | "createdAt" | "updatedAt">): Promise<Product> => {
     try {
-      const response = await fetch("/api/products", {
+      const response = await apiFetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -328,7 +360,7 @@ export const productStorage = {
 
   update: async (id: string, updates: Partial<Product>): Promise<Product | null> => {
     try {
-      const response = await fetch(`/api/products/${id}`, {
+      const response = await apiFetch(`/api/products/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -350,7 +382,7 @@ export const productStorage = {
 
   delete: async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/products/${id}`, { method: "DELETE" })
+      const response = await apiFetch(`/api/products/${id}`, { method: "DELETE" })
       if (!response.ok) {
         const payload = await safeParseJson(response)
         const message = payload?.error || "Erro ao excluir produto."
@@ -365,157 +397,162 @@ export const productStorage = {
   },
 }
 
-export const receiptProductStorage = {
-  getByReceiptId: async (receiptId: string): Promise<ReceiptProduct[]> => {
-    const { data, error } = await supabase.from("receipt_products").select("*").eq("receipt_id", receiptId)
-
-    if (error) {
-      console.error("Error fetching receipt products:", error)
-      return []
-    }
-
-    return data || []
-  },
-
-  create: async (receiptProduct: Omit<ReceiptProduct, "id">): Promise<ReceiptProduct> => {
-    const { data, error } = await supabase.from("receipt_products").insert([receiptProduct]).select().single()
-
-    if (error) {
-      console.error("Error creating receipt product:", error)
-      throw error
-    }
-
-    return data
-  },
-
-  deleteByReceiptId: async (receiptId: string): Promise<boolean> => {
-    const { error } = await supabase.from("receipt_products").delete().eq("receipt_id", receiptId)
-
-    if (error) {
-      console.error("Error deleting receipt products:", error)
-      return false
-    }
-
-    return true
-  },
-}
-
 // Receipts
 export const receiptStorage = {
   getAll: async (): Promise<Receipt[]> => {
     try {
-      const { data: receiptsData, error: receiptsError } = await supabase
-        .from("receipts")
-        .select("*")
-        .order("created_at", { ascending: false })
+      const response = await apiFetch("/api/receipts")
+      const payload = await safeParseJson(response)
 
-      if (receiptsError) {
-        console.error("Error fetching receipts:", receiptsError)
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return []
+        }
+        const message = payload?.error || "Erro ao listar recibos."
+        console.error(message)
         return []
       }
 
-      if (!receiptsData || receiptsData.length === 0) {
-        return []
-      }
-
-      // Buscar produtos para cada recibo
-      const receiptsWithProducts = await Promise.all(
-        receiptsData.map(async (receipt) => {
-          const products = await receiptProductStorage.getByReceiptId(receipt.id)
-          return {
-            ...mapReceiptFromDb(receipt),
-            products: products || [],
-          }
-        }),
-      )
-
-      return receiptsWithProducts
+      const rows = Array.isArray(payload?.data) ? payload.data : []
+      return rows.map(mapReceiptFromDb)
     } catch (error) {
-      console.error("Error connecting to database:", error)
+      console.error("Error fetching receipts:", error)
       return []
     }
   },
 
   getById: async (id: string): Promise<Receipt | undefined> => {
-    const { data, error } = await supabase
-      .from("receipts")
-      .select(`
-        *,
-        receipt_products (
-          id,
-          product_id,
-          quantity,
-          unit_price,
-          total
-        )
-      `)
-      .eq("id", id)
-      .single()
+    try {
+      const response = await apiFetch(`/api/receipts/${id}`)
+      const payload = await safeParseJson(response)
 
-    if (error) {
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          if (response.status !== 404) {
+            console.error("Error fetching receipt:", payload?.error)
+          }
+          return undefined
+        }
+        if (response.status !== 404) {
+          console.error("Error fetching receipt:", payload?.error)
+        }
+        return undefined
+      }
+
+      return payload?.data ? mapReceiptFromDb(payload.data) : undefined
+    } catch (error) {
       console.error("Error fetching receipt:", error)
       return undefined
     }
-
-    return data
-      ? {
-          ...mapReceiptFromDb(data),
-          products: data.receipt_products || [],
-        }
-      : undefined
   },
 
   create: async (receipt: Omit<Receipt, "id" | "createdAt" | "updatedAt">): Promise<Receipt> => {
-    const { products, ...receiptData } = receipt
+    const response = await apiFetch("/api/receipts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(receipt),
+    })
 
-    const dbReceiptData = mapReceiptToDb(receiptData)
-
-    const { data: receiptResult, error: receiptError } = await supabase
-      .from("receipts")
-      .insert([dbReceiptData])
-      .select()
-      .single()
-
-    if (receiptError) {
-      console.error("Error creating receipt:", receiptError)
-      throw new Error("Não foi possível criar o recibo. Verifique se o Supabase está configurado.")
+    const payload = await safeParseJson(response)
+    if (!response.ok) {
+      const message = payload?.error || "Erro ao criar recibo."
+      throw new Error(message)
     }
 
-    // Criar produtos do recibo se existirem
-    if (products && products.length > 0) {
-      const receiptProducts = products.map((product) => ({
-        receipt_id: receiptResult.id,
-        product_id: product.productId,
-        quantity: product.quantity,
-        unit_price: product.unitPrice,
-        total: product.total,
-      }))
-
-      const { error: productsError } = await supabase.from("receipt_products").insert(receiptProducts)
-
-      if (productsError) {
-        console.error("Error creating receipt products:", productsError)
-        // Rollback: deletar o recibo criado
-        await supabase.from("receipts").delete().eq("id", receiptResult.id)
-        throw new Error("Erro ao criar produtos do recibo.")
-      }
-    }
-
-    return {
-      ...mapReceiptFromDb(receiptResult),
-      products: products || [],
-    }
+    return mapReceiptFromDb(payload.data)
   },
 
   delete: async (id: string): Promise<boolean> => {
-    const { error } = await supabase.from("receipts").delete().eq("id", id)
+    try {
+      const response = await apiFetch(`/api/receipts/${id}`, { method: "DELETE" })
+      if (!response.ok) {
+        const payload = await safeParseJson(response)
+        const message = payload?.error || "Erro ao excluir recibo."
+        throw new Error(message)
+      }
 
-    if (error) {
+      return true
+    } catch (error) {
       console.error("Error deleting receipt:", error)
       return false
     }
+  },
+}
+// Daily Expenses
+export const dailyExpenseStorage = {
+  getAll: async (): Promise<DailyExpense[]> => {
+    try {
+      const response = await apiFetch("/api/daily-expenses")
+      const payload = await safeParseJson(response)
 
-    return true
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return []
+        }
+        const message = payload?.error || "Erro ao listar despesas."
+        console.error(message)
+        return []
+      }
+
+      return Array.isArray(payload?.data) ? payload.data : []
+    } catch (error) {
+      console.error("Error fetching daily expenses:", error)
+      return []
+    }
+  },
+
+  getById: async (id: string): Promise<DailyExpense | undefined> => {
+    try {
+      const response = await apiFetch(`/api/daily-expenses/${id}`)
+      const payload = await safeParseJson(response)
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          if (response.status !== 404) {
+            console.error("Error fetching daily expense:", payload?.error)
+          }
+          return undefined
+        }
+        return undefined
+      }
+
+      return payload?.data as DailyExpense
+    } catch (error) {
+      console.error("Error fetching daily expense:", error)
+      return undefined
+    }
+  },
+
+  create: async (expense: Omit<DailyExpense, "id" | "createdAt">): Promise<DailyExpense> => {
+    const response = await apiFetch("/api/daily-expenses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(expense),
+    })
+
+    const payload = await safeParseJson(response)
+    if (!response.ok) {
+      const message = payload?.error || "Erro ao salvar despesa."
+      throw new Error(message)
+    }
+
+    return payload?.data as DailyExpense
+  },
+
+  delete: async (id: string): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`/api/daily-expenses/${id}`, { method: "DELETE" })
+      if (!response.ok) {
+        const payload = await safeParseJson(response)
+        const message = payload?.error || "Erro ao excluir despesa."
+        throw new Error(message)
+      }
+
+      return true
+    } catch (error) {
+      console.error("Error deleting daily expense:", error)
+      return false
+    }
   },
 }
 
@@ -557,103 +594,6 @@ export const alertStorage = {
 
     if (error) {
       console.error("Error marking alert as read:", error)
-      return false
-    }
-
-    return true
-  },
-}
-
-// Daily Expenses
-export const dailyExpenseStorage = {
-  getAll: async (): Promise<DailyExpense[]> => {
-    try {
-      const { data, error } = await supabase.from("daily_expenses").select("*").order("date", { ascending: false })
-
-      if (error) {
-        console.error("Error fetching daily expenses:", error)
-        return []
-      }
-
-      return (data || []).map((item) => ({
-        id: item.id,
-        date: item.date,
-        category: mapDailyExpenseCategoryForDisplay(item.category),
-        amount: item.amount,
-        observations: item.observations,
-        supplierId: item.supplier_id,
-        createdAt: item.created_at,
-      }))
-    } catch (error) {
-      console.error("Error connecting to database:", error)
-      return []
-    }
-  },
-
-  getById: async (id: string): Promise<DailyExpense | undefined> => {
-    const { data, error } = await supabase.from("daily_expenses").select("*").eq("id", id).single()
-
-    if (error) {
-      console.error("Error fetching daily expense:", error)
-      return undefined
-    }
-
-    return data
-      ? {
-          id: data.id,
-          date: data.date,
-          category: mapDailyExpenseCategoryForDisplay(data.category),
-          amount: data.amount,
-          observations: data.observations,
-          supplierId: data.supplier_id,
-          createdAt: data.created_at,
-        }
-      : undefined
-  },
-
-  create: async (expense: Omit<DailyExpense, "id" | "createdAt">): Promise<DailyExpense> => {
-    // Validação básica
-    if (!expense.date || !expense.category || expense.amount === undefined || expense.amount <= 0) {
-      throw new Error("Dados inválidos: data, categoria e valor são obrigatórios")
-    }
-
-    const categorySlug = mapDailyExpenseCategoryForDb(expense.category)
-
-    const dbExpense = {
-      date: expense.date,
-      category: categorySlug,
-      amount: Number(expense.amount),
-      observations: expense.observations || null,
-      supplier_id: expense.supplierId || null,
-    }
-
-    const { data, error } = await supabase.from("daily_expenses").insert([dbExpense]).select().single()
-
-    if (error) {
-      console.error("Erro ao salvar gasto:", error)
-      throw new Error(`Erro ao salvar gasto: ${error.message}`)
-    }
-
-    if (!data) {
-      throw new Error("Nenhum dado retornado após inserção")
-    }
-
-    return {
-      id: data.id,
-      date: data.date,
-      category: mapDailyExpenseCategoryForDisplay(data.category),
-      amount: data.amount,
-      observations: data.observations,
-      supplierId: data.supplier_id,
-      createdAt: data.created_at,
-    }
-  },
-
-  delete: async (id: string): Promise<boolean> => {
-    const { error } = await supabase.from("daily_expenses").delete().eq("id", id)
-
-    if (error) {
-      console.error("Error deleting daily expense:", error)
       return false
     }
 
@@ -794,6 +734,8 @@ const deserializeServiceOrder = (order: any): ServiceOrder => {
     completedDate: order.completedDate ?? order.completed_date ?? undefined,
     totalValue: typeof order.totalValue === "number" ? order.totalValue : Number(order.total_value ?? 0),
     notes: order.notes ?? undefined,
+    userId: order.userId ?? order.user_id ?? "",
+    owner: order.owner,
     items: rawItems.map(deserializeServiceOrderItem),
     createdAt: rawCreatedAt ? new Date(rawCreatedAt) : new Date(),
     updatedAt: rawUpdatedAt ? new Date(rawUpdatedAt) : new Date(),
@@ -1057,21 +999,44 @@ const mapReceiptToDb = (receipt: any) => {
 }
 
 const mapReceiptFromDb = (receipt: any) => {
-  const { client_id, supplier_id, has_invoice, ...rest } = receipt
+  if (!receipt) return receipt
+
+  const clientId = receipt.client_id ?? receipt.clientId ?? null
+  const supplierId = receipt.supplier_id ?? receipt.supplierId ?? null
+  const hasInvoiceField = receipt.has_invoice ?? receipt.hasInvoice
+  const entityName = receipt.entity_name ?? receipt.entityName
+  const description = receipt.description ?? undefined
+  const observations = receipt.observations ?? undefined
+  const createdAt = receipt.created_at ?? receipt.createdAt
+  const updatedAt = receipt.updated_at ?? receipt.updatedAt
+
+  const products = Array.isArray(receipt.products)
+    ? receipt.products.map((product: any) => ({
+        productId: product.product_id ?? product.productId,
+        quantity: Number(product.quantity ?? 0),
+        unitPrice: Number(product.unit_price ?? product.unitPrice ?? 0),
+        total: Number(product.total ?? 0),
+      }))
+    : []
+
   return {
-    ...rest,
-    ...(client_id && { clientId: client_id }),
-    ...(supplier_id && { supplierId: supplier_id }),
-    ...(has_invoice !== undefined && { hasInvoice: has_invoice }),
+    id: receipt.id,
+    type: receipt.type,
+    supplierId: supplierId ?? undefined,
+    clientId: clientId ?? undefined,
+    entityName: entityName ?? undefined,
+    description,
+    date: receipt.date,
+    total: typeof receipt.total === "number" ? receipt.total : Number(receipt.total ?? 0),
+    hasInvoice: hasInvoiceField !== undefined ? Boolean(hasInvoiceField) : undefined,
+    observations,
+    createdAt: createdAt ? new Date(createdAt) : undefined,
+    updatedAt: updatedAt ? new Date(updatedAt) : undefined,
+    userId: receipt.userId ?? receipt.user_id ?? "",
+    owner: receipt.owner,
+    products,
   }
 }
-
-
-
-
-
-
-
 
 
 

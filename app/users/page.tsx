@@ -10,6 +10,7 @@ import type { User } from "@/lib/types"
 import { UserForm } from "@/components/user-form"
 import { RoleBadge } from "@/components/role-badge"
 import { ProtectedRoute } from "@/components/protected-route"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
 
 function UnauthorizedMessage() {
   return (
@@ -62,6 +63,7 @@ function UsersPageContent() {
       )
     } catch (err) {
       console.error("Error loading users:", err)
+      showErrorToast("Erro ao carregar usuários.")
     } finally {
       setLoading(false)
     }
@@ -110,15 +112,14 @@ function UsersPageContent() {
       )
       setIsFormOpen(false)
       setEditingUser(null)
+      showSuccessToast("Usuário atualizado com sucesso.")
     } catch (err) {
       console.error("Error updating user:", err)
-      alert("Erro ao atualizar usuario")
+      showErrorToast("Erro ao atualizar usuário.")
     }
   }
 
   const handleDeleteUser = async (email: string) => {
-    if (!confirm("Tem certeza que deseja excluir este usuario?")) return
-
     try {
       const response = await fetch("/api/users", {
         method: "DELETE",
@@ -133,9 +134,10 @@ function UsersPageContent() {
       }
 
       setUsers((prev) => prev.filter((user) => user.email !== email))
+      showSuccessToast("Usuário excluído com sucesso.")
     } catch (err) {
       console.error("Error deleting user:", err)
-      alert("Erro ao excluir usuario")
+      showErrorToast("Erro ao excluir usuário.")
     }
   }
 
@@ -248,7 +250,7 @@ function UsersPageContent() {
 
 export default function UsersPage() {
   return (
-    <ProtectedRoute allowedRoles={["admin"]} fallback={<UnauthorizedMessage />}>
+    <ProtectedRoute allowedRoles={["ADMIN"]} fallback={<UnauthorizedMessage />}>
       <UsersPageContent />
     </ProtectedRoute>
   )

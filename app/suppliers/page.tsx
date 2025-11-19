@@ -8,6 +8,9 @@ import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { supplierStorage } from "@/lib/storage"
 import type { Supplier } from "@/lib/types"
 import { SupplierForm } from "@/components/supplier-form"
+import { useOwnerDirectory } from "@/hooks/use-owner-directory"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -15,6 +18,14 @@ export default function SuppliersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [loading, setLoading] = useState(true)
+  const [ownerFilter, setOwnerFilter] = useState("all")
+  const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setOwnerFilter("all")
+    }
+  }, [isAdmin])
 
   useEffect(() => {
     loadSuppliers()
@@ -26,25 +37,30 @@ export default function SuppliersPage() {
       setSuppliers(data)
     } catch (error) {
       console.error("Erro ao carregar fornecedores:", error)
+      showErrorToast("Erro ao carregar fornecedores.")
     } finally {
       setLoading(false)
     }
   }
 
-  const filteredSuppliers = suppliers.filter(
-    (supplier) =>
+  const filteredSuppliers = suppliers.filter((supplier) => {
+    const matchesSearch =
       supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       supplier.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.cnpj.includes(searchTerm),
-  )
+      supplier.cnpj.includes(searchTerm)
+    const matchesOwner = !isAdmin || ownerFilter === "all" || supplier.userId === ownerFilter
+    return matchesSearch && matchesOwner
+  })
 
   const handleCreateSupplier = async (data: Omit<Supplier, "id" | "createdAt" | "updatedAt">) => {
     try {
       const newSupplier = await supplierStorage.create(data)
       setSuppliers([...suppliers, newSupplier])
       setShowForm(false)
+      showSuccessToast("Fornecedor cadastrado com sucesso.")
     } catch (error) {
       console.error("Erro ao criar fornecedor:", error)
+      showErrorToast("Erro ao criar fornecedor.")
     }
   }
 
@@ -56,20 +72,22 @@ export default function SuppliersPage() {
         setSuppliers(suppliers.map((s) => (s.id === editingSupplier.id ? updated : s)))
         setEditingSupplier(null)
         setShowForm(false)
+        showSuccessToast("Fornecedor atualizado com sucesso.")
       }
     } catch (error) {
       console.error("Erro ao atualizar fornecedor:", error)
+      showErrorToast("Erro ao atualizar fornecedor.")
     }
   }
 
   const handleDeleteSupplier = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este fornecedor?")) {
-      try {
-        await supplierStorage.delete(id)
-        setSuppliers(suppliers.filter((s) => s.id !== id))
-      } catch (error) {
-        console.error("Erro ao excluir fornecedor:", error)
-      }
+    try {
+      await supplierStorage.delete(id)
+      setSuppliers(suppliers.filter((s) => s.id !== id))
+      showSuccessToast("Fornecedor excluído com sucesso.")
+    } catch (error) {
+      console.error("Erro ao excluir fornecedor:", error)
+      showErrorToast("Erro ao excluir fornecedor.")
     }
   }
 
@@ -109,7 +127,7 @@ export default function SuppliersPage() {
 
       {/* Barra de busca */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
@@ -119,6 +137,24 @@ export default function SuppliersPage() {
               className="pl-10"
             />
           </div>
+          {isAdmin && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-600">Filtrar por usuário</p>
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os usuários" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os usuários</SelectItem>
+                  {owners.map((owner) => (
+                    <SelectItem key={owner.id} value={owner.id}>
+                      {owner.fullName || owner.email || owner.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -144,6 +180,11 @@ export default function SuppliersPage() {
                       <p>Telefone: {supplier.phone}</p>
                       <p>CNPJ: {supplier.cnpj}</p>
                       <p>Endereço: {supplier.address}</p>
+                        {isAdmin && (
+                          <p className="text-xs text-gray-500">
+                            Criado por: {getOwnerLabel(supplier.userId) ?? "Desconhecido"}
+                          </p>
+                        )}
                     </div>
                   </div>
                   <div className="flex gap-2">

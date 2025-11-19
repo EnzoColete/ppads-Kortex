@@ -1,4 +1,5 @@
 ﻿import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
 import { runQuery } from "@/lib/server/db"
 
 const mapClientToDb = (client: any) => {
@@ -12,10 +13,11 @@ const mapClientToDb = (client: any) => {
 
 const mapClientFromDb = (client: any) => {
   if (!client) return client
-  const { cpf_cnpj, ...rest } = client
+  const { cpf_cnpj, user_id, ...rest } = client
   return {
     ...rest,
     cpfCnpj: cpf_cnpj ?? null,
+    userId: user_id ?? null,
   }
 }
 
@@ -31,8 +33,30 @@ function buildInsertPayload(dbClient: ClientRow) {
   return { columns, values }
 }
 
+function isAdmin(role: string | undefined | null) {
+  return (role ?? "").toUpperCase() === "ADMIN"
+}
+
+function unauthorized() {
+  return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
+}
+
 export async function GET() {
   try {
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      return unauthorized()
+    }
+
+    const admin = isAdmin(currentUser.role)
+    const params: any[] = []
+    let whereClause = ""
+
+    if (!admin) {
+      whereClause = "WHERE user_id = $1::uuid"
+      params.push(currentUser.id)
+    }
+
     const { rows } = await runQuery(
       `
         SELECT id,
@@ -44,10 +68,13 @@ export async function GET() {
                latitude,
                longitude,
                created_at,
-               updated_at
+               updated_at,
+               user_id
           FROM public.clients
+          ${whereClause}
          ORDER BY created_at DESC
       `,
+      params,
     )
 
     return NextResponse.json({
@@ -61,6 +88,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      return unauthorized()
+    }
+
     const payload = await request.json()
 
     if (!payload || typeof payload !== "object") {
@@ -74,8 +106,8 @@ export async function POST(request: Request) {
     }
 
     const existingEmail = await runQuery<{ id: string; name: string }>(
-      "SELECT id, name FROM public.clients WHERE lower(email) = lower($1) LIMIT 1",
-      [dbClient.email],
+      "SELECT id, name FROM public.clients WHERE lower(email) = lower($1) AND user_id = $2::uuid LIMIT 1",
+      [dbClient.email, currentUser.id],
     )
 
     if (existingEmail.rows.length > 0) {
@@ -87,8 +119,8 @@ export async function POST(request: Request) {
 
     if (dbClient.cpf_cnpj) {
       const existingCpf = await runQuery<{ id: string; name: string }>(
-        "SELECT id, name FROM public.clients WHERE cpf_cnpj = $1 LIMIT 1",
-        [dbClient.cpf_cnpj],
+        "SELECT id, name FROM public.clients WHERE cpf_cnpj = $1 AND user_id = $2::uuid LIMIT 1",
+        [dbClient.cpf_cnpj, currentUser.id],
       )
 
       if (existingCpf.rows.length > 0) {
@@ -105,15 +137,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nenhum campo valido informado." }, { status: 400 })
     }
 
-    const placeholders = columns.map((_, index) => `$${index + 1}`)
+    const placeholders = columns.map((_, index) => `$${index + 2}`)
 
     const insertQuery = `
-      INSERT INTO public.clients (${columns.join(", ")})
-      VALUES (${placeholders.join(", ")})
+      INSERT INTO public.clients (user_id, ${columns.join(", ")})
+      VALUES ($1::uuid, ${placeholders.join(", ")})
       RETURNING *
     `
 
-    const result = await runQuery(insertQuery, values)
+    const result = await runQuery(insertQuery, [currentUser.id, ...values])
     const data = result.rows[0]
 
     return NextResponse.json({ data: mapClientFromDb(data) })

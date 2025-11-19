@@ -1,3 +1,9 @@
+export interface OwnerInfo {
+  id: string
+  fullName?: string
+  email?: string
+}
+
 export interface Supplier {
   id: string
   name: string
@@ -7,6 +13,8 @@ export interface Supplier {
   cnpj: string
   createdAt: Date
   updatedAt: Date
+  userId?: string
+  owner?: OwnerInfo
 }
 
 export interface Client {
@@ -18,6 +26,8 @@ export interface Client {
   cpfCnpj: string
   createdAt: Date
   updatedAt: Date
+  userId?: string
+  owner?: OwnerInfo
 }
 
 export interface Product {
@@ -33,6 +43,8 @@ export interface Product {
   type?: "nitrogen" | "semen" | "other" | string
   createdAt: Date
   updatedAt: Date
+  userId?: string
+  owner?: OwnerInfo
 }
 
 export interface Receipt {
@@ -49,6 +61,8 @@ export interface Receipt {
   observations?: string
   createdAt: Date
   updatedAt: Date
+  userId?: string
+  owner?: OwnerInfo
 }
 
 export interface ReceiptProduct {
@@ -67,13 +81,15 @@ export interface DailyExpense {
   supplierId?: string
   supplierName?: string
   createdAt?: string
+  userId?: string
+  owner?: OwnerInfo
 }
 
 export interface User {
   id: string
   email: string
   fullName: string
-  role: "admin" | "technician" | "client"
+  role: "ADMIN" | "USER"
   emailVerified: boolean
   createdAt: Date
   updatedAt: Date
@@ -95,6 +111,8 @@ export interface ServiceOrder {
   items: ServiceOrderItem[]
   createdAt: Date
   updatedAt: Date
+  userId?: string
+  owner?: OwnerInfo
 }
 
 export interface ServiceOrderItem {

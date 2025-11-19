@@ -10,6 +10,9 @@ import { receiptStorage, supplierStorage, clientStorage, productStorage } from "
 import type { Receipt, Supplier, Client, Product } from "@/lib/types"
 import { ReceiptForm } from "@/components/receipt-form"
 import { ReceiptView } from "@/components/receipt-view"
+import { useOwnerDirectory } from "@/hooks/use-owner-directory"
+import { showErrorToast, showSuccessToast } from "@/lib/toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([])
@@ -20,6 +23,14 @@ export default function ReceiptsPage() {
   const [showForm, setShowForm] = useState(false)
   const [viewingReceipt, setViewingReceipt] = useState<Receipt | null>(null)
   const [loading, setLoading] = useState(true)
+  const [ownerFilter, setOwnerFilter] = useState("all")
+  const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setOwnerFilter("all")
+    }
+  }, [isAdmin])
 
   useEffect(() => {
     const loadData = async () => {
@@ -36,6 +47,7 @@ export default function ReceiptsPage() {
         setProducts(productsData)
       } catch (error) {
         console.error("Error loading data:", error)
+        showErrorToast("Erro ao carregar dados do recibo.")
       } finally {
         setLoading(false)
       }
@@ -58,11 +70,12 @@ export default function ReceiptsPage() {
   const filteredReceipts = receipts.filter((receipt) => {
     const entityName = getEntityName(receipt).toLowerCase()
     const searchLower = searchTerm.toLowerCase()
-    return (
+    const matchesSearch =
       entityName.includes(searchLower) ||
       receipt.id.toLowerCase().includes(searchLower) ||
       receipt.type.includes(searchLower)
-    )
+    const matchesOwner = !isAdmin || ownerFilter === "all" || receipt.userId === ownerFilter
+    return matchesSearch && matchesOwner
   })
 
   const formatDate = (dateValue: any): string => {
@@ -95,19 +108,21 @@ export default function ReceiptsPage() {
       const newReceipt = await receiptStorage.create(data)
       setReceipts([...receipts, newReceipt])
       setShowForm(false)
+      showSuccessToast("Recibo emitido com sucesso.")
     } catch (error) {
       console.error("Error creating receipt:", error)
+      showErrorToast("Erro ao criar recibo.")
     }
   }
 
   const handleDeleteReceipt = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este recibo?")) {
-      try {
-        await receiptStorage.delete(id)
-        setReceipts(receipts.filter((r) => r.id !== id))
-      } catch (error) {
-        console.error("Error deleting receipt:", error)
-      }
+    try {
+      await receiptStorage.delete(id)
+      setReceipts(receipts.filter((r) => r.id !== id))
+      showSuccessToast("Recibo excluído com sucesso.")
+    } catch (error) {
+      console.error("Error deleting receipt:", error)
+      showErrorToast("Erro ao excluir recibo.")
     }
   }
 
@@ -163,7 +178,7 @@ export default function ReceiptsPage() {
 
       {/* Barra de busca */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
@@ -173,6 +188,24 @@ export default function ReceiptsPage() {
               className="pl-10"
             />
           </div>
+          {isAdmin && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-600">Filtrar por usuário</p>
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os usuários" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os usuários</SelectItem>
+                  {owners.map((owner) => (
+                    <SelectItem key={owner.id} value={owner.id}>
+                      {owner.fullName || owner.email || owner.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -222,6 +255,11 @@ export default function ReceiptsPage() {
                       <p className="text-xs text-gray-500">
                         Emitido em: {formatDate(receipt.date || receipt.createdAt)}
                       </p>
+                      {isAdmin && (
+                        <p className="text-xs text-gray-500">
+                          Criado por: {getOwnerLabel(receipt.userId) ?? "Desconhecido"}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -263,6 +301,7 @@ export default function ReceiptsPage() {
           clients={clients}
           products={products}
           onClose={handleCloseView}
+          ownerLabel={isAdmin ? getOwnerLabel(viewingReceipt.userId) : undefined}
         />
       )}
     </div>

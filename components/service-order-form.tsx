@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, Plus, Trash2 } from "lucide-react"
 import type { ServiceOrder, Client, Product, ServiceOrderItem } from "@/lib/types"
+import { showErrorToast } from "@/lib/toast"
 
 interface ServiceOrderFormProps {
   clients: Client[]
@@ -51,7 +52,7 @@ export function ServiceOrderForm({ clients, products, order, onSubmit, onCancel 
 
   const handleAddItem = () => {
     if (!currentItem.description || currentItem.quantity <= 0 || currentItem.unitPrice <= 0) {
-      alert("Preencha todos os campos do item")
+      showErrorToast("Preencha todos os campos do item.")
       return
     }
 
@@ -82,7 +83,7 @@ export function ServiceOrderForm({ clients, products, order, onSubmit, onCancel 
     e.preventDefault()
 
     if (!formData.clientId || !formData.title) {
-      alert("Preencha os campos obrigatórios")
+      showErrorToast("Preencha os campos obrigatórios.")
       return
     }
 
