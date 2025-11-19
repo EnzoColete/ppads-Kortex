@@ -8,8 +8,13 @@ function createPool() {
     throw new Error("DATABASE_URL not configured")
   }
 
+  const maxConnections = Number(process.env.DATABASE_POOL_SIZE ?? "3")
+
   return new Pool({
     connectionString,
+    max: Number.isNaN(maxConnections) ? 3 : maxConnections,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 5_000,
     ssl: connectionString.includes("supabase.co") ? { rejectUnauthorized: false } : undefined,
   })
 }
