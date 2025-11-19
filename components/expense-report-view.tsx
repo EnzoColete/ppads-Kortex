@@ -14,9 +14,9 @@ interface ExpenseReportViewProps {
 }
 
 const CATEGORY_SUMMARIES = [
-  { key: "alimentacao", label: "Alimenta��o", badge: "secondary", bg: "bg-blue-50", text: "text-blue-600" },
-  { key: "combustivel", label: "Combust��vel", badge: "default", bg: "bg-green-50", text: "text-green-600" },
-  { key: "pedagio", label: "Ped��gio", badge: "outline", bg: "bg-orange-50", text: "text-orange-600" },
+  { key: "alimentacao", label: "Alimentação", badge: "secondary", bg: "bg-blue-50", text: "text-blue-600" },
+  { key: "combustivel", label: "Combustível", badge: "default", bg: "bg-green-50", text: "text-green-600" },
+  { key: "pedagio", label: "Pedágio", badge: "outline", bg: "bg-orange-50", text: "text-orange-600" },
   { key: "fornecedor", label: "Fornecedor", badge: "destructive", bg: "bg-purple-50", text: "text-purple-600" },
 ]
 
@@ -41,7 +41,7 @@ export function ExpenseReportView({ expenses, startDate, endDate, onClose }: Exp
   }
 
   const handleExportExcel = () => {
-    const headers = ["Data", "Categoria", "Valor", "Fornecedor", "Observa����es"]
+    const headers = ["Data", "Categoria", "Valor", "Fornecedor", "Observações"]
     const rows = expenses.map((expense) => [
       formatDate(expense.date),
       expense.category || "-",
@@ -77,13 +77,13 @@ export function ExpenseReportView({ expenses, startDate, endDate, onClose }: Exp
   const periodText =
     startDate && endDate
       ? `${formatDate(startDate)} a ${formatDate(endDate)}`
-      : "Todos os per��odos"
+      : "Todos os períodos"
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <Card className="w-full max-w-4xl my-8">
         <CardHeader className="flex flex-row items-center justify-between print:hidden">
-          <CardTitle>Relat��rio de Gastos Diǭrios</CardTitle>
+          <CardTitle>Relatório de Gastos Diários</CardTitle>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Download className="h-4 w-4 mr-1" />
@@ -100,10 +100,10 @@ export function ExpenseReportView({ expenses, startDate, endDate, onClose }: Exp
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="text-center border-b pb-4">
-            <h1 className="text-2xl font-bold">RELAT�\"RIO DE GASTOS DI�?RIOS</h1>
-            <p className="text-gray-600">Per��odo: {periodText}</p>
+            <h1 className="text-2xl font-bold">RELATÓRIO DE GASTOS DIÁRIOS</h1>
+            <p className="text-gray-600">Período: {periodText}</p>
             <p className="text-sm text-gray-500">
-              Gerado em: {new Date().toLocaleDateString("pt-BR")} ��s {new Date().toLocaleTimeString("pt-BR")}
+              Gerado em: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR")}
             </p>
           </div>
 
@@ -129,14 +129,14 @@ export function ExpenseReportView({ expenses, startDate, endDate, onClose }: Exp
                     <th className="border border-gray-300 p-2 text-left">Categoria</th>
                     <th className="border border-gray-300 p-2 text-right">Valor</th>
                     <th className="border border-gray-300 p-2 text-left">Fornecedor</th>
-                    <th className="border border-gray-300 p-2 text-left">Observa����es</th>
+                    <th className="border border-gray-300 p-2 text-left">Observações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {expenses.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="border border-gray-300 p-4 text-center text-gray-500">
-                        Nenhum gasto registrado para o per��odo selecionado.
+                        Nenhum gasto registrado para o período selecionado.
                       </td>
                     </tr>
                   ) : (
@@ -171,15 +171,15 @@ export function ExpenseReportView({ expenses, startDate, endDate, onClose }: Exp
             <div className="text-sm text-gray-600 mt-2">
               <p>Total de registros: {expenses.length}</p>
               <p>
-                M��dia por registro:{" "}
+                Média por registro:{" "}
                 {expenses.length > 0 ? formatCurrency(totalExpenses / expenses.length) : formatCurrency(0)}
               </p>
             </div>
           </div>
 
           <div className="text-center text-sm text-gray-500 border-t pt-4">
-            <p>Este relat��rio foi gerado automaticamente pelo Sistema de Gestǜo</p>
-            <p>Relat��rio de Gastos Diǭrios - {new Date().toLocaleString("pt-BR")}</p>
+            <p>Este relatório foi gerado automaticamente pelo Sistema de Gestão</p>
+            <p>Relatório de Gastos Diários - {new Date().toLocaleString("pt-BR")}</p>
           </div>
         </CardContent>
       </Card>
