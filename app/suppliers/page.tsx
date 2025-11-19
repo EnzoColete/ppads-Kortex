@@ -12,6 +12,8 @@ import { useOwnerDirectory } from "@/hooks/use-owner-directory"
 import { showErrorToast, showSuccessToast } from "@/lib/toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+const DEFAULT_PAGE_SIZE = 20
+
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -19,6 +21,7 @@ export default function SuppliersPage() {
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [loading, setLoading] = useState(true)
   const [ownerFilter, setOwnerFilter] = useState("all")
+  const [pagination, setPagination] = useState({ page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0 })
   const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
 
   useEffect(() => {
@@ -28,13 +31,29 @@ export default function SuppliersPage() {
   }, [isAdmin])
 
   useEffect(() => {
-    loadSuppliers()
-  }, [])
+    const handle = setTimeout(() => {
+      void loadSuppliers(pagination.page)
+    }, 250)
+    return () => clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, ownerFilter, pagination.page])
 
-  const loadSuppliers = async () => {
+  const loadSuppliers = async (pageValue = pagination.page) => {
     try {
-      const data = await supplierStorage.getAll()
-      setSuppliers(data)
+      setLoading(true)
+      const response = await supplierStorage.list({
+        page: pageValue,
+        pageSize: pagination.pageSize,
+        search: searchTerm,
+        ownerId: ownerFilter !== "all" ? ownerFilter : undefined,
+      })
+      setSuppliers(response.data)
+      setPagination((prev) => ({
+        ...prev,
+        page: response.meta.page,
+        pageSize: response.meta.pageSize,
+        total: response.meta.total,
+      }))
     } catch (error) {
       console.error("Erro ao carregar fornecedores:", error)
       showErrorToast("Erro ao carregar fornecedores.")
@@ -43,20 +62,12 @@ export default function SuppliersPage() {
     }
   }
 
-  const filteredSuppliers = suppliers.filter((supplier) => {
-    const matchesSearch =
-      supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.cnpj.includes(searchTerm)
-    const matchesOwner = !isAdmin || ownerFilter === "all" || supplier.userId === ownerFilter
-    return matchesSearch && matchesOwner
-  })
-
   const handleCreateSupplier = async (data: Omit<Supplier, "id" | "createdAt" | "updatedAt">) => {
     try {
-      const newSupplier = await supplierStorage.create(data)
-      setSuppliers([...suppliers, newSupplier])
+      await supplierStorage.create(data)
       setShowForm(false)
+      setPagination((prev) => ({ ...prev, page: 1 }))
+      void loadSuppliers(1)
       showSuccessToast("Fornecedor cadastrado com sucesso.")
     } catch (error) {
       console.error("Erro ao criar fornecedor:", error)
@@ -69,9 +80,9 @@ export default function SuppliersPage() {
     try {
       const updated = await supplierStorage.update(editingSupplier.id, data)
       if (updated) {
-        setSuppliers(suppliers.map((s) => (s.id === editingSupplier.id ? updated : s)))
         setEditingSupplier(null)
         setShowForm(false)
+        void loadSuppliers(pagination.page)
         showSuccessToast("Fornecedor atualizado com sucesso.")
       }
     } catch (error) {
@@ -83,7 +94,7 @@ export default function SuppliersPage() {
   const handleDeleteSupplier = async (id: string) => {
     try {
       await supplierStorage.delete(id)
-      setSuppliers(suppliers.filter((s) => s.id !== id))
+      void loadSuppliers(pagination.page)
       showSuccessToast("Fornecedor excluído com sucesso.")
     } catch (error) {
       console.error("Erro ao excluir fornecedor:", error)
@@ -91,17 +102,14 @@ export default function SuppliersPage() {
     }
   }
 
-  const handleEdit = (supplier: Supplier) => {
-    setEditingSupplier(supplier)
-    setShowForm(true)
-  }
-
   const handleCloseForm = () => {
     setShowForm(false)
     setEditingSupplier(null)
   }
 
-  if (loading) {
+  const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.pageSize))
+
+  if (loading && suppliers.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -125,7 +133,6 @@ export default function SuppliersPage() {
         </Button>
       </div>
 
-      {/* Barra de busca */}
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="relative">
@@ -133,14 +140,23 @@ export default function SuppliersPage() {
             <Input
               placeholder="Buscar por nome, email ou CNPJ..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value)
+                setPagination((prev) => ({ ...prev, page: 1 }))
+              }}
               className="pl-10"
             />
           </div>
           {isAdmin && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-600">Filtrar por usuário</p>
-              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+              <Select
+                value={ownerFilter}
+                onValueChange={(value) => {
+                  setOwnerFilter(value)
+                  setPagination((prev) => ({ ...prev, page: 1 }))
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos os usuários" />
                 </SelectTrigger>
@@ -158,9 +174,8 @@ export default function SuppliersPage() {
         </CardContent>
       </Card>
 
-      {/* Lista de fornecedores */}
       <div className="grid gap-4">
-        {filteredSuppliers.length === 0 ? (
+        {suppliers.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
               <div className="text-center py-8 text-gray-500">
@@ -169,7 +184,7 @@ export default function SuppliersPage() {
             </CardContent>
           </Card>
         ) : (
-          filteredSuppliers.map((supplier) => (
+          suppliers.map((supplier) => (
             <Card key={supplier.id}>
               <CardContent className="pt-6">
                 <div className="flex justify-between items-start">
@@ -180,15 +195,22 @@ export default function SuppliersPage() {
                       <p>Telefone: {supplier.phone}</p>
                       <p>CNPJ: {supplier.cnpj}</p>
                       <p>Endereço: {supplier.address}</p>
-                        {isAdmin && (
-                          <p className="text-xs text-gray-500">
-                            Criado por: {getOwnerLabel(supplier.userId) ?? "Desconhecido"}
-                          </p>
-                        )}
+                      {isAdmin && (
+                        <p className="text-xs text-gray-500">
+                          Criado por: {getOwnerLabel(supplier.userId) ?? "Desconhecido"}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(supplier)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingSupplier(supplier)
+                        setShowForm(true)
+                      }}
+                    >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button
@@ -207,7 +229,35 @@ export default function SuppliersPage() {
         )}
       </div>
 
-      {/* Formulário */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-gray-600">
+          Página {pagination.page} de {totalPages} — {pagination.total} registros
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pagination.page === 1}
+            onClick={() => setPagination((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pagination.page >= totalPages}
+            onClick={() =>
+              setPagination((prev) => ({
+                ...prev,
+                page: Math.min(totalPages, prev.page + 1),
+              }))
+            }
+          >
+            Próxima
+          </Button>
+        </div>
+      </div>
+
       {showForm && (
         <SupplierForm
           supplier={editingSupplier}

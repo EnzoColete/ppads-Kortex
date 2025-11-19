@@ -1,4 +1,5 @@
-﻿import { NextResponse } from "next/server"
+import { NextResponse } from "next/server"
+import { performance } from "perf_hooks"
 import { getCurrentUser } from "@/lib/auth"
 import { runQuery } from "@/lib/server/db"
 
@@ -23,6 +24,9 @@ const mapSupplierFromDb = (supplier: any) => {
   }
 }
 
+const DEFAULT_PAGE_SIZE = 20
+const MAX_PAGE_SIZE = 100
+
 function buildInsertPayload(dbSupplier: SupplierRow) {
   const columns = SUPPLIER_COLUMNS.filter((column) => dbSupplier[column] !== undefined)
   const values = columns.map((column) => dbSupplier[column])
@@ -37,21 +41,48 @@ function unauthorized() {
   return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
 }
 
-export async function GET() {
+const parseQueryParams = (request: Request) => {
+  const url = new URL(request.url)
+  const page = Math.max(1, Number(url.searchParams.get("page") ?? "1"))
+  const requestedPageSize = Number(url.searchParams.get("pageSize") ?? DEFAULT_PAGE_SIZE)
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, requestedPageSize))
+  const search = url.searchParams.get("search")?.trim().toLowerCase() ?? ""
+  const ownerId = url.searchParams.get("ownerId")?.trim() ?? ""
+  return { page, pageSize, search, ownerId }
+}
+
+export async function GET(request: Request) {
+  const started = performance.now()
   try {
+    const { page, pageSize, search, ownerId } = parseQueryParams(request)
     const currentUser = await getCurrentUser()
     if (!currentUser) {
       return unauthorized()
     }
 
     const admin = isAdmin(currentUser.role)
+    const filters: string[] = []
     const params: any[] = []
-    let whereClause = ""
+    let paramIndex = 1
 
     if (!admin) {
-      whereClause = "WHERE user_id = $1::uuid"
+      filters.push(`user_id = $${paramIndex++}::uuid`)
       params.push(currentUser.id)
+    } else if (ownerId) {
+      filters.push(`user_id = $${paramIndex++}::uuid`)
+      params.push(ownerId)
     }
+
+    if (search) {
+      filters.push(
+        `(LOWER(name) LIKE $${paramIndex} OR LOWER(email) LIKE $${paramIndex} OR cnpj LIKE $${paramIndex})`,
+      )
+      params.push(`%${search}%`)
+      paramIndex++
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : ""
+    const offset = (page - 1) * pageSize
 
     const { rows } = await runQuery(
       `
@@ -67,14 +98,29 @@ export async function GET() {
           FROM public.suppliers
           ${whereClause}
          ORDER BY created_at DESC
+         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
+      [...params, pageSize, offset],
+    )
+
+    const { rows: countRows } = await runQuery<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM public.suppliers ${whereClause}`,
       params,
     )
 
-    return NextResponse.json({ data: rows.map(mapSupplierFromDb) })
+    const meta = {
+      page,
+      pageSize,
+      total: Number(countRows[0]?.count ?? 0),
+    }
+
+    return NextResponse.json({ data: rows.map(mapSupplierFromDb), meta })
   } catch (error) {
     console.error("GET /api/suppliers failed:", error)
     return NextResponse.json({ error: "Erro inesperado ao listar fornecedores." }, { status: 500 })
+  } finally {
+    const duration = Math.round(performance.now() - started)
+    console.log(`[API] GET /api/suppliers completed in ${duration}ms`)
   }
 }
 

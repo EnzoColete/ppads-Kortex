@@ -1,4 +1,5 @@
-﻿import { NextResponse } from "next/server"
+import { NextResponse } from "next/server"
+import { performance } from "perf_hooks"
 import { getCurrentUser } from "@/lib/auth"
 import { runQuery } from "@/lib/server/db"
 
@@ -25,6 +26,9 @@ const RECEIPT_SELECT = `
          user_id
     FROM public.receipts
 `
+
+const DEFAULT_PAGE_SIZE = 15
+const MAX_PAGE_SIZE = 100
 
 function isAdmin(role?: string | null) {
   return (role ?? "").toUpperCase() === "ADMIN"
@@ -104,38 +108,81 @@ function normalizeProducts(products: unknown): ReceiptProductPayload[] {
     .filter((product) => product.productId && product.quantity > 0)
 }
 
-export async function GET() {
+const parseQueryParams = (request: Request) => {
+  const url = new URL(request.url)
+  const page = Math.max(1, Number(url.searchParams.get("page") ?? "1"))
+  const requestedPageSize = Number(url.searchParams.get("pageSize") ?? DEFAULT_PAGE_SIZE)
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, requestedPageSize))
+  const search = url.searchParams.get("search")?.trim().toLowerCase() ?? ""
+  const ownerId = url.searchParams.get("ownerId")?.trim() ?? ""
+  return { page, pageSize, search, ownerId }
+}
+
+export async function GET(request: Request) {
+  const started = performance.now()
   try {
+    const { page, pageSize, search, ownerId } = parseQueryParams(request)
     const currentUser = await getCurrentUser()
     if (!currentUser) {
       return unauthorized()
     }
 
     const admin = isAdmin(currentUser.role)
+    const filters: string[] = []
     const params: any[] = []
-    let whereClause = ""
+    let paramIndex = 1
 
     if (!admin) {
-      whereClause = "WHERE user_id = $1::uuid"
+      filters.push(`user_id = $${paramIndex++}::uuid`)
       params.push(currentUser.id)
+    } else if (ownerId) {
+      filters.push(`user_id = $${paramIndex++}::uuid`)
+      params.push(ownerId)
     }
+
+    if (search) {
+      filters.push(
+        `(LOWER(entity_name) LIKE $${paramIndex} OR LOWER(id::text) LIKE $${paramIndex} OR LOWER(type) LIKE $${paramIndex})`,
+      )
+      params.push(`%${search}%`)
+      paramIndex++
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : ""
+    const offset = (page - 1) * pageSize
 
     const { rows } = await runQuery(
       `${RECEIPT_SELECT}
         ${whereClause}
        ORDER BY created_at DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
-      params,
+      [...params, pageSize, offset],
     )
 
     const receiptIds = rows.map((row) => row.id)
     const productsByReceipt = await fetchReceiptProducts(receiptIds)
 
-    const data = rows.map((row) => mapReceipt(row, productsByReceipt.get(row.id) ?? []))
-    return NextResponse.json({ data })
+    const mapped = rows.map((row) => mapReceipt(row, productsByReceipt.get(row.id) ?? []))
+
+    const { rows: countRows } = await runQuery<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM public.receipts ${whereClause}`,
+      params,
+    )
+
+    const meta = {
+      page,
+      pageSize,
+      total: Number(countRows[0]?.count ?? 0),
+    }
+
+    return NextResponse.json({ data: mapped, meta })
   } catch (error) {
     console.error("GET /api/receipts failed:", error)
     return NextResponse.json({ error: "Erro inesperado ao listar recibos." }, { status: 500 })
+  } finally {
+    const duration = Math.round(performance.now() - started)
+    console.log(`[API] GET /api/receipts completed in ${duration}ms`)
   }
 }
 
@@ -152,8 +199,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Payload invalido." }, { status: 400 })
     }
 
-    const type = payload.type === "supplier" ? "supplier" : payload.type === "client" ? "client" : null
-    if (!type) {
+    const type = payload.type
+    if (type !== "supplier" && type !== "client") {
       return NextResponse.json({ error: "Tipo de recibo invalido." }, { status: 400 })
     }
 
@@ -220,7 +267,8 @@ export async function POST(request: Request) {
     }
 
     const total = products.reduce((sum, product) => sum + product.quantity * product.unitPrice, 0)
-    const receiptDate = payload.date && `${payload.date}`.trim().length > 0 ? payload.date : new Date().toISOString().split("T")[0]
+    const receiptDate =
+      payload.date && `${payload.date}`.trim().length > 0 ? payload.date : new Date().toISOString().split("T")[0]
 
     const insertReceipt = await runQuery(
       `
@@ -260,10 +308,13 @@ export async function POST(request: Request) {
 
     products.forEach((product, index) => {
       const base = index * 4
-      valueFragments.push(
-        `($1::uuid, $${base + 2}::uuid, $${base + 3}, $${base + 4}, $${base + 5})`,
+      valueFragments.push(`($1::uuid, $${base + 2}::uuid, $${base + 3}, $${base + 4}, $${base + 5})`)
+      params.push(
+        product.productId,
+        product.quantity,
+        product.unitPrice,
+        product.total || product.quantity * product.unitPrice,
       )
-      params.push(product.productId, product.quantity, product.unitPrice, product.total || product.quantity * product.unitPrice)
     })
 
     if (valueFragments.length > 0) {

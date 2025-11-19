@@ -10,6 +10,8 @@ import type {
   CalendarEvent,
   ServiceOrder,
   ServiceOrderItem,
+  PaginatedResult,
+  PaginationMeta,
 } from "./types"
 import { supabase } from "./supabase/client"
 import { logger } from "./logger"
@@ -17,6 +19,33 @@ import { logger } from "./logger"
 
 const apiFetch = (input: RequestInfo | URL, init?: RequestInit) => {
   return fetch(input, { credentials: "include", ...init })
+}
+
+type ListRequestParams = {
+  page?: number
+  pageSize?: number
+  search?: string
+  ownerId?: string
+}
+
+const buildQueryString = (params: Record<string, string | number | undefined>) => {
+  const searchParams = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return
+    searchParams.append(key, String(value))
+  })
+
+  const query = searchParams.toString()
+  return query.length ? `?${query}` : ""
+}
+
+const parsePaginationMeta = (payload: any): PaginationMeta => {
+  const fallbackSize = Array.isArray(payload?.data) ? payload.data.length : 0
+  return {
+    page: Number(payload?.meta?.page ?? 1),
+    pageSize: Number(payload?.meta?.pageSize ?? fallbackSize),
+    total: Number(payload?.meta?.total ?? fallbackSize),
+  }
 }
 
 const mapClientToDb = (client: any) => {
@@ -77,26 +106,40 @@ const mapProductFromApi = (product: any): Product => ({
 })
 
 // Suppliers
-export const supplierStorage = {
-  getAll: async (): Promise<Supplier[]> => {
-    try {
-      const response = await apiFetch("/api/suppliers")
-      const payload = await safeParseJson(response)
+const listSuppliers = async (options: ListRequestParams = {}): Promise<PaginatedResult<Supplier>> => {
+  try {
+    const query = buildQueryString({
+      page: options.page,
+      pageSize: options.pageSize,
+      search: options.search,
+      ownerId: options.ownerId,
+    })
+    const response = await apiFetch(`/api/suppliers${query}`)
+    const payload = await safeParseJson(response)
 
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          return []
-        }
-        const message = payload?.error || "Erro ao listar fornecedores."
-        console.error(message)
-        return []
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
       }
-
-      return Array.isArray(payload?.data) ? payload.data : []
-    } catch (error) {
-      console.error("Error fetching suppliers:", error)
-      return []
+      const message = payload?.error || "Erro ao listar fornecedores."
+      throw new Error(message)
     }
+
+    const rows = Array.isArray(payload?.data) ? payload.data : []
+    return { data: rows as Supplier[], meta: parsePaginationMeta(payload) }
+  } catch (error) {
+    console.error("Error fetching suppliers:", error)
+    return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
+  }
+}
+
+export const supplierStorage = {
+  list: listSuppliers,
+
+  getAll: async (options?: { limit?: number }): Promise<Supplier[]> => {
+    const limit = options?.limit ?? 1000
+    const result = await listSuppliers({ page: 1, pageSize: limit })
+    return result.data
   },
 
   getById: async (id: string): Promise<Supplier | undefined> => {
@@ -179,27 +222,40 @@ export const supplierStorage = {
 }
 
 // Clients
-export const clientStorage = {
-  getAll: async (): Promise<Client[]> => {
-    try {
-      const response = await apiFetch("/api/clients", { method: "GET" })
-      const payload = await safeParseJson(response)
+const listClients = async (options: ListRequestParams = {}): Promise<PaginatedResult<Client>> => {
+  try {
+    const query = buildQueryString({
+      page: options.page,
+      pageSize: options.pageSize,
+      search: options.search,
+      ownerId: options.ownerId,
+    })
+    const response = await apiFetch(`/api/clients${query}`, { method: "GET" })
+    const payload = await safeParseJson(response)
 
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          return []
-        }
-        const message = payload?.error || "Erro ao listar clientes."
-        console.error(message)
-        return []
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
       }
-
-      const rows = Array.isArray(payload?.data) ? payload.data : []
-      return rows.map(mapClientFromDb)
-    } catch (error) {
-      console.error("Error fetching clients:", error)
-      return []
+      const message = payload?.error || "Erro ao listar clientes."
+      throw new Error(message)
     }
+
+    const rows = Array.isArray(payload?.data) ? payload.data : []
+    return { data: rows.map(mapClientFromDb), meta: parsePaginationMeta(payload) }
+  } catch (error) {
+    console.error("Error fetching clients:", error)
+    return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
+  }
+}
+
+export const clientStorage = {
+  list: listClients,
+
+  getAll: async (options?: { limit?: number }): Promise<Client[]> => {
+    const limit = options?.limit ?? 1000
+    const result = await listClients({ page: 1, pageSize: limit })
+    return result.data
   },
 
   getById: async (id: string): Promise<Client | undefined> => {
@@ -282,27 +338,40 @@ export const clientStorage = {
 }
 
 // Products
-export const productStorage = {
-  getAll: async (): Promise<Product[]> => {
-    try {
-      const response = await apiFetch("/api/products")
-      const payload = await safeParseJson(response)
+const listProducts = async (options: ListRequestParams = {}): Promise<PaginatedResult<Product>> => {
+  try {
+    const query = buildQueryString({
+      page: options.page,
+      pageSize: options.pageSize,
+      search: options.search,
+      ownerId: options.ownerId,
+    })
+    const response = await apiFetch(`/api/products${query}`)
+    const payload = await safeParseJson(response)
 
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          return []
-        }
-        const message = payload?.error || "Erro ao listar produtos."
-        console.error(message)
-        return []
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
       }
-
-      const rows = Array.isArray(payload?.data) ? payload.data : []
-      return rows.map(mapProductFromApi)
-    } catch (error) {
-      console.error("Error connecting to database:", error)
-      return []
+      const message = payload?.error || "Erro ao listar produtos."
+      throw new Error(message)
     }
+
+    const rows = Array.isArray(payload?.data) ? payload.data : []
+    return { data: rows.map(mapProductFromApi), meta: parsePaginationMeta(payload) }
+  } catch (error) {
+    console.error("Error connecting to database:", error)
+    return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
+  }
+}
+
+export const productStorage = {
+  list: listProducts,
+
+  getAll: async (options?: { limit?: number }): Promise<Product[]> => {
+    const limit = options?.limit ?? 1000
+    const result = await listProducts({ page: 1, pageSize: limit })
+    return result.data
   },
 
   getById: async (id: string): Promise<Product | undefined> => {
@@ -398,27 +467,40 @@ export const productStorage = {
 }
 
 // Receipts
-export const receiptStorage = {
-  getAll: async (): Promise<Receipt[]> => {
-    try {
-      const response = await apiFetch("/api/receipts")
-      const payload = await safeParseJson(response)
+const listReceipts = async (options: ListRequestParams = {}): Promise<PaginatedResult<Receipt>> => {
+  try {
+    const query = buildQueryString({
+      page: options.page,
+      pageSize: options.pageSize,
+      search: options.search,
+      ownerId: options.ownerId,
+    })
+    const response = await apiFetch(`/api/receipts${query}`)
+    const payload = await safeParseJson(response)
 
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          return []
-        }
-        const message = payload?.error || "Erro ao listar recibos."
-        console.error(message)
-        return []
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
       }
-
-      const rows = Array.isArray(payload?.data) ? payload.data : []
-      return rows.map(mapReceiptFromDb)
-    } catch (error) {
-      console.error("Error fetching receipts:", error)
-      return []
+      const message = payload?.error || "Erro ao listar recibos."
+      throw new Error(message)
     }
+
+    const rows = Array.isArray(payload?.data) ? payload.data : []
+    return { data: rows.map(mapReceiptFromDb), meta: parsePaginationMeta(payload) }
+  } catch (error) {
+    console.error("Error fetching receipts:", error)
+    return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
+  }
+}
+
+export const receiptStorage = {
+  list: listReceipts,
+
+  getAll: async (options?: { limit?: number }): Promise<Receipt[]> => {
+    const limit = options?.limit ?? 1000
+    const result = await listReceipts({ page: 1, pageSize: limit })
+    return result.data
   },
 
   getById: async (id: string): Promise<Receipt | undefined> => {
@@ -863,82 +945,6 @@ export const getServiceOrders = async (): Promise<ServiceOrder[]> => await servi
 export const saveDailyExpense = async (expense: Omit<DailyExpense, "id" | "createdAt">): Promise<DailyExpense> =>
   await dailyExpenseStorage.create(expense)
 export const deleteDailyExpense = async (id: string): Promise<boolean> => await dailyExpenseStorage.delete(id)
-
-export const getDashboardStats = async () => {
-  try {
-    console.log("[v0] Starting getDashboardStats")
-
-    const [suppliers, clients, products, receipts, alerts, expenses, serviceOrders] = await Promise.all([
-      supplierStorage.getAll(),
-      clientStorage.getAll(),
-      productStorage.getAll(),
-      receiptStorage.getAll(),
-      alertStorage.getAll(),
-      dailyExpenseStorage.getAll(),
-      serviceOrderStorage.getAll(),
-    ])
-
-    console.log("[v0] Data fetched successfully:", {
-      suppliers: suppliers.length,
-      clients: clients.length,
-      products: products.length,
-      receipts: receipts.length,
-      alerts: alerts.length,
-      expenses: expenses.length,
-      serviceOrders: serviceOrders.length,
-    })
-
-    const currentMonth = new Date().getMonth()
-    const currentYear = new Date().getFullYear()
-
-    const monthlyReceipts = receipts.filter((receipt) => {
-      if (!receipt || !receipt.createdAt) return false
-
-      try {
-        const receiptDate = new Date(receipt.createdAt)
-        if (isNaN(receiptDate.getTime())) return false
-
-        return receiptDate.getMonth() === currentMonth && receiptDate.getFullYear() === currentYear
-      } catch (error) {
-        return false
-      }
-    })
-
-    const totalRevenue = receipts.reduce((sum, receipt) => sum + (receipt.total || 0), 0)
-    const totalExpenses = expenses.reduce((sum, expense) => {
-      return sum + (expense.amount || 0)
-    }, 0)
-    const netProfit = totalRevenue - totalExpenses
-
-    const stats = {
-      totalSuppliers: suppliers.length || 0,
-      totalClients: clients.length || 0,
-      totalProducts: products.length || 0,
-      monthlyReceipts: monthlyReceipts.length || 0,
-      unreadAlerts: alerts.filter((alert) => alert && !alert.isRead).length || 0,
-      totalRevenue,
-      totalExpenses,
-      netProfit,
-      totalServiceOrders: serviceOrders.length || 0,
-    }
-
-    console.log("[v0] Dashboard stats calculated:", stats)
-    return stats
-  } catch (error) {
-    console.error("[v0] Error getting dashboard stats:", error)
-    return {
-      totalSuppliers: 0,
-      totalClients: 0,
-      totalProducts: 0,
-      monthlyReceipts: 0,
-      unreadAlerts: 0,
-      totalRevenue: 0,
-      totalExpenses: 0,
-      netProfit: 0,
-      totalServiceOrders: 0,
-    }
-  }
-}
 
 export const setupRealtimeSubscription = (callback: () => void) => {
   const channels = [

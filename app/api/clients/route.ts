@@ -1,4 +1,5 @@
-﻿import { NextResponse } from "next/server"
+import { NextResponse } from "next/server"
+import { performance } from "perf_hooks"
 import { getCurrentUser } from "@/lib/auth"
 import { runQuery } from "@/lib/server/db"
 
@@ -27,6 +28,9 @@ type AllowedColumn = (typeof ALLOWED_COLUMNS)[number]
 
 type ClientRow = Record<AllowedColumn, any> & Record<string, unknown>
 
+const DEFAULT_PAGE_SIZE = 20
+const MAX_PAGE_SIZE = 100
+
 function buildInsertPayload(dbClient: ClientRow) {
   const columns = ALLOWED_COLUMNS.filter((column) => dbClient[column] !== undefined)
   const values = columns.map((column) => dbClient[column])
@@ -41,21 +45,49 @@ function unauthorized() {
   return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
 }
 
-export async function GET() {
+const parseQueryParams = (request: Request) => {
+  const url = new URL(request.url)
+  const page = Math.max(1, Number(url.searchParams.get("page") ?? "1"))
+  const requestedPageSize = Number(url.searchParams.get("pageSize") ?? DEFAULT_PAGE_SIZE)
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, requestedPageSize))
+  const search = url.searchParams.get("search")?.trim().toLowerCase() ?? ""
+  const ownerId = url.searchParams.get("ownerId")?.trim() ?? ""
+  return { page, pageSize, search, ownerId }
+}
+
+export async function GET(request: Request) {
+  const started = performance.now()
   try {
+    const { page, pageSize, search, ownerId } = parseQueryParams(request)
     const currentUser = await getCurrentUser()
     if (!currentUser) {
       return unauthorized()
     }
 
     const admin = isAdmin(currentUser.role)
+
+    const filters: string[] = []
     const params: any[] = []
-    let whereClause = ""
+    let paramIndex = 1
 
     if (!admin) {
-      whereClause = "WHERE user_id = $1::uuid"
+      filters.push(`user_id = $${paramIndex++}::uuid`)
       params.push(currentUser.id)
+    } else if (ownerId) {
+      filters.push(`user_id = $${paramIndex++}::uuid`)
+      params.push(ownerId)
     }
+
+    if (search) {
+      filters.push(
+        `(LOWER(name) LIKE $${paramIndex} OR LOWER(email) LIKE $${paramIndex} OR cpf_cnpj LIKE $${paramIndex})`,
+      )
+      params.push(`%${search}%`)
+      paramIndex++
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : ""
+    const offset = (page - 1) * pageSize
 
     const { rows } = await runQuery(
       `
@@ -73,16 +105,32 @@ export async function GET() {
           FROM public.clients
           ${whereClause}
          ORDER BY created_at DESC
+         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
+      [...params, pageSize, offset],
+    )
+
+    const { rows: countRows } = await runQuery<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM public.clients ${whereClause}`,
       params,
     )
 
+    const meta = {
+      page,
+      pageSize,
+      total: Number(countRows[0]?.count ?? 0),
+    }
+
     return NextResponse.json({
       data: rows.map(mapClientFromDb),
+      meta,
     })
   } catch (error) {
     console.error("GET /api/clients failed:", error)
     return NextResponse.json({ error: "Erro inesperado ao listar clientes." }, { status: 500 })
+  } finally {
+    const duration = Math.round(performance.now() - started)
+    console.log(`[API] GET /api/clients completed in ${duration}ms`)
   }
 }
 

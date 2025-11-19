@@ -4,6 +4,17 @@ export interface OwnerInfo {
   email?: string
 }
 
+export interface PaginationMeta {
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface PaginatedResult<T> {
+  data: T[]
+  meta: PaginationMeta
+}
+
 export interface Supplier {
   id: string
   name: string

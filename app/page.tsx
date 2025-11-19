@@ -1,70 +1,35 @@
-"use client"
-
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, Package, Receipt, Database } from "lucide-react"
-import { getDashboardStats } from "@/lib/storage"
 import { PWAInstall } from "@/components/pwa-install"
+import { getDashboardStatsForCurrentUser } from "@/lib/server/dashboard-stats"
+import { getCurrentUser } from "@/lib/auth"
 
-export default function Dashboard() {
-  const router = useRouter()
-  const [stats, setStats] = useState({
+export default async function DashboardPage() {
+  const user = await getCurrentUser()
+  if (!user) {
+    redirect("/auth/login")
+  }
+
+  let stats = {
     totalSuppliers: 0,
     totalClients: 0,
     totalProducts: 0,
     monthlyReceipts: 0,
     unreadAlerts: 0,
-  })
-  const [loading, setLoading] = useState(true)
-  const [dbConnected, setDbConnected] = useState(true)
-
-  const updateStats = async () => {
-    try {
-      console.log("[v0] Updating dashboard stats")
-      const newStats = await getDashboardStats()
-      console.log("[v0] Stats received:", newStats)
-      setStats(newStats)
-      setDbConnected(true)
-    } catch (error) {
-      console.error("[v0] Erro ao carregar estatísticas:", error)
-      setDbConnected(false)
-    } finally {
-      setLoading(false)
-    }
+    totalRevenue: 0,
+    totalExpenses: 0,
+    netProfit: 0,
+    totalServiceOrders: 0,
+    dbConnected: true,
   }
 
-  useEffect(() => {
-    updateStats()
-
-    const interval = setInterval(updateStats, 30000) // Atualiza a cada 30 segundos
-
-    return () => {
-      clearInterval(interval)
-    }
-  }, [])
-
-  const handleNewClient = () => {
-    router.push("/clients")
-  }
-
-  const handleNewReceipt = () => {
-    router.push("/receipts")
-  }
-
-  const handleNewProduct = () => {
-    router.push("/products")
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Carregando dashboard...</p>
-        </div>
-      </div>
-    )
+  try {
+    stats = await getDashboardStatsForCurrentUser()
+  } catch (error) {
+    console.error("[dashboard] failed to load stats:", error)
+    stats.dbConnected = false
   }
 
   return (
@@ -74,7 +39,7 @@ export default function Dashboard() {
         <p className="text-sm lg:text-base text-gray-600 mt-2">Visão geral do sistema de gestão empresarial</p>
       </div>
 
-      {!dbConnected && (
+      {!stats.dbConnected && (
         <Card className="border-yellow-200 bg-yellow-50">
           <CardHeader>
             <CardTitle className="flex items-center text-yellow-800">
@@ -143,32 +108,32 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4">
-            <button
-              onClick={handleNewClient}
+            <Link
+              href="/clients"
               className="p-3 lg:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
             >
               <Users className="h-5 w-5 lg:h-6 lg:w-6 text-blue-500 mb-2" />
               <h3 className="font-medium text-sm lg:text-base">Novo Cliente</h3>
               <p className="text-xs lg:text-sm text-gray-600">Cadastrar novo cliente</p>
-            </button>
+            </Link>
 
-            <button
-              onClick={handleNewReceipt}
+            <Link
+              href="/receipts"
               className="p-3 lg:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
             >
               <Receipt className="h-5 w-5 lg:h-6 lg:w-6 text-green-500 mb-2" />
               <h3 className="font-medium text-sm lg:text-base">Emitir Recibo</h3>
               <p className="text-xs lg:text-sm text-gray-600">Criar novo recibo</p>
-            </button>
+            </Link>
 
-            <button
-              onClick={handleNewProduct}
+            <Link
+              href="/products"
               className="p-3 lg:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 text-left transition-colors"
             >
               <Package className="h-5 w-5 lg:h-6 lg:w-6 text-purple-500 mb-2" />
               <h3 className="font-medium text-sm lg:text-base">Novo Produto</h3>
               <p className="text-xs lg:text-sm text-gray-600">Cadastrar produto</p>
-            </button>
+            </Link>
           </div>
         </CardContent>
       </Card>

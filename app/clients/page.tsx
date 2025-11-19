@@ -12,6 +12,8 @@ import { useOwnerDirectory } from "@/hooks/use-owner-directory"
 import { showErrorToast, showSuccessToast } from "@/lib/toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+const DEFAULT_PAGE_SIZE = 20
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -19,6 +21,7 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
   const [ownerFilter, setOwnerFilter] = useState("all")
+  const [pagination, setPagination] = useState({ page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0 })
   const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
 
   useEffect(() => {
@@ -28,13 +31,29 @@ export default function ClientsPage() {
   }, [isAdmin])
 
   useEffect(() => {
-    loadClients()
-  }, [])
+    const handle = setTimeout(() => {
+      void loadClients(pagination.page)
+    }, 250)
+    return () => clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, ownerFilter, pagination.page])
 
-  const loadClients = async () => {
+  const loadClients = async (pageValue = pagination.page) => {
     try {
-      const data = await clientStorage.getAll()
-      setClients(data)
+      setLoading(true)
+      const response = await clientStorage.list({
+        page: pageValue,
+        pageSize: pagination.pageSize,
+        search: searchTerm,
+        ownerId: ownerFilter !== "all" ? ownerFilter : undefined,
+      })
+      setClients(response.data)
+      setPagination((prev) => ({
+        ...prev,
+        page: response.meta.page,
+        pageSize: response.meta.pageSize,
+        total: response.meta.total,
+      }))
     } catch (error) {
       console.error("Erro ao carregar clientes:", error)
       showErrorToast("Erro ao carregar clientes.")
@@ -43,22 +62,13 @@ export default function ClientsPage() {
     }
   }
 
-  const filteredClients = clients.filter(
-    (client) => {
-      const matchesSearch =
-        client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.cpfCnpj.includes(searchTerm)
-      const matchesOwner = !isAdmin || ownerFilter === "all" || client.userId === ownerFilter
-      return matchesSearch && matchesOwner
-    },
-  )
-
   const handleCreateClient = async (data: Omit<Client, "id" | "createdAt" | "updatedAt">) => {
     try {
-      const newClient = await clientStorage.create(data)
-      setClients([...clients, newClient])
+      await clientStorage.create(data)
       setShowForm(false)
+      setSearchTerm("")
+      setPagination((prev) => ({ ...prev, page: 1 }))
+      void loadClients(1)
       showSuccessToast("Cliente cadastrado com sucesso.")
     } catch (error) {
       console.error("Erro ao criar cliente:", error)
@@ -66,15 +76,9 @@ export default function ClientsPage() {
       showErrorToast(errorMessage)
 
       if (errorMessage.includes("email")) {
-        const existingClient = clients.find((c) => c.email === data.email)
-        if (existingClient) {
-          setSearchTerm(data.email)
-        }
+        setSearchTerm(data.email)
       } else if (errorMessage.includes("CPF/CNPJ")) {
-        const existingClient = clients.find((c) => c.cpfCnpj === data.cpfCnpj)
-        if (existingClient) {
-          setSearchTerm(data.cpfCnpj)
-        }
+        setSearchTerm(data.cpfCnpj)
       }
     }
   }
@@ -84,9 +88,9 @@ export default function ClientsPage() {
     try {
       const updated = await clientStorage.update(editingClient.id, data)
       if (updated) {
-        setClients(clients.map((c) => (c.id === editingClient.id ? updated : c)))
         setEditingClient(null)
         setShowForm(false)
+        void loadClients(pagination.page)
         showSuccessToast("Cliente atualizado com sucesso.")
       }
     } catch (error) {
@@ -99,7 +103,7 @@ export default function ClientsPage() {
   const handleDeleteClient = async (id: string) => {
     try {
       await clientStorage.delete(id)
-      setClients(clients.filter((c) => c.id !== id))
+      void loadClients(pagination.page)
       showSuccessToast("Cliente excluído com sucesso.")
     } catch (error) {
       console.error("Erro ao excluir cliente:", error)
@@ -117,7 +121,9 @@ export default function ClientsPage() {
     setEditingClient(null)
   }
 
-  if (loading) {
+  const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.pageSize))
+
+  if (loading && clients.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -141,7 +147,6 @@ export default function ClientsPage() {
         </Button>
       </div>
 
-      {/* Barra de busca */}
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="relative">
@@ -149,14 +154,23 @@ export default function ClientsPage() {
             <Input
               placeholder="Buscar por nome, email ou CPF/CNPJ..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value)
+                setPagination((prev) => ({ ...prev, page: 1 }))
+              }}
               className="pl-10"
             />
           </div>
           {isAdmin && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-600">Filtrar por usuário</p>
-              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+              <Select
+                value={ownerFilter}
+                onValueChange={(value) => {
+                  setOwnerFilter(value)
+                  setPagination((prev) => ({ ...prev, page: 1 }))
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos os usuários" />
                 </SelectTrigger>
@@ -174,9 +188,8 @@ export default function ClientsPage() {
         </CardContent>
       </Card>
 
-      {/* Lista de clientes */}
       <div className="grid gap-4">
-        {filteredClients.length === 0 ? (
+        {clients.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
               <div className="text-center py-8 text-gray-500">
@@ -185,7 +198,7 @@ export default function ClientsPage() {
             </CardContent>
           </Card>
         ) : (
-          filteredClients.map((client) => (
+          clients.map((client) => (
             <Card key={client.id}>
               <CardContent className="pt-6">
                 <div className="flex justify-between items-start">
@@ -223,7 +236,35 @@ export default function ClientsPage() {
         )}
       </div>
 
-      {/* Formulário */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-gray-600">
+          Página {pagination.page} de {totalPages} — {pagination.total} registros
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pagination.page === 1}
+            onClick={() => setPagination((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pagination.page >= totalPages}
+            onClick={() =>
+              setPagination((prev) => ({
+                ...prev,
+                page: Math.min(totalPages, prev.page + 1),
+              }))
+            }
+          >
+            Próxima
+          </Button>
+        </div>
+      </div>
+
       {showForm && (
         <ClientForm
           client={editingClient}

@@ -12,6 +12,8 @@ import { useOwnerDirectory } from "@/hooks/use-owner-directory"
 import { showErrorToast, showSuccessToast } from "@/lib/toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+const DEFAULT_PAGE_SIZE = 20
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -19,6 +21,7 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [ownerFilter, setOwnerFilter] = useState("all")
+  const [pagination, setPagination] = useState({ page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0 })
   const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
 
   useEffect(() => {
@@ -28,34 +31,43 @@ export default function ProductsPage() {
   }, [isAdmin])
 
   useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        const data = await productStorage.getAll()
-        setProducts(data)
-      } catch (error) {
-        console.error("Error loading products:", error)
-        showErrorToast("Erro ao carregar produtos.")
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadProducts()
-  }, [])
+    const handle = setTimeout(() => {
+      void loadProducts(pagination.page)
+    }, 250)
+    return () => clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, ownerFilter, pagination.page])
 
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.unit.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesOwner = !isAdmin || ownerFilter === "all" || product.userId === ownerFilter
-    return matchesSearch && matchesOwner
-  })
+  const loadProducts = async (pageValue = pagination.page) => {
+    try {
+      setLoading(true)
+      const response = await productStorage.list({
+        page: pageValue,
+        pageSize: pagination.pageSize,
+        search: searchTerm,
+        ownerId: ownerFilter !== "all" ? ownerFilter : undefined,
+      })
+      setProducts(response.data)
+      setPagination((prev) => ({
+        ...prev,
+        page: response.meta.page,
+        pageSize: response.meta.pageSize,
+        total: response.meta.total,
+      }))
+    } catch (error) {
+      console.error("Error loading products:", error)
+      showErrorToast("Erro ao carregar produtos.")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleCreateProduct = async (data: Omit<Product, "id" | "createdAt" | "updatedAt">) => {
     try {
-      const newProduct = await productStorage.create(data)
-      setProducts([...products, newProduct])
+      await productStorage.create(data)
       setShowForm(false)
+      setPagination((prev) => ({ ...prev, page: 1 }))
+      void loadProducts(1)
       showSuccessToast("Produto cadastrado com sucesso.")
     } catch (error) {
       console.error("Error creating product:", error)
@@ -68,9 +80,9 @@ export default function ProductsPage() {
     try {
       const updated = await productStorage.update(editingProduct.id, data)
       if (updated) {
-        setProducts(products.map((p) => (p.id === editingProduct.id ? updated : p)))
         setEditingProduct(null)
         setShowForm(false)
+        void loadProducts(pagination.page)
         showSuccessToast("Produto atualizado com sucesso.")
       }
     } catch (error) {
@@ -82,7 +94,7 @@ export default function ProductsPage() {
   const handleDeleteProduct = async (id: string) => {
     try {
       await productStorage.delete(id)
-      setProducts(products.filter((p) => p.id !== id))
+      void loadProducts(pagination.page)
       showSuccessToast("Produto excluído com sucesso.")
     } catch (error) {
       console.error("Error deleting product:", error)
@@ -90,17 +102,19 @@ export default function ProductsPage() {
     }
   }
 
-  const handleEdit = (product: Product) => {
-    setEditingProduct(product)
-    setShowForm(true)
-  }
-
   const handleCloseForm = () => {
     setShowForm(false)
     setEditingProduct(null)
   }
 
-  if (loading) {
+  const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.pageSize))
+
+  const averagePrice =
+    products.length > 0 ? products.reduce((sum, product) => sum + product.price, 0) / products.length : 0
+
+  const uniqueUnits = new Set(products.map((product) => product.unit)).size
+
+  if (loading && products.length === 0) {
     return <div className="flex justify-center items-center h-64">Carregando produtos...</div>
   }
 
@@ -124,14 +138,23 @@ export default function ProductsPage() {
             <Input
               placeholder="Buscar por nome, descrição ou unidade..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value)
+                setPagination((prev) => ({ ...prev, page: 1 }))
+              }}
               className="pl-10"
             />
           </div>
           {isAdmin && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-600">Filtrar por usuário</p>
-              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+              <Select
+                value={ownerFilter}
+                onValueChange={(value) => {
+                  setOwnerFilter(value)
+                  setPagination((prev) => ({ ...prev, page: 1 }))
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos os usuários" />
                 </SelectTrigger>
@@ -153,7 +176,7 @@ export default function ProductsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{products.length}</div>
+              <div className="text-2xl font-bold text-blue-600">{pagination.total}</div>
               <p className="text-sm text-gray-600">Total de Produtos</p>
             </div>
           </CardContent>
@@ -162,13 +185,8 @@ export default function ProductsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
-                R${" "}
-                {products.length > 0
-                  ? (products.reduce((sum, p) => sum + p.price, 0) / products.length).toFixed(2)
-                  : "0.00"}
-              </div>
-              <p className="text-sm text-gray-600">Preço Médio</p>
+              <div className="text-2xl font-bold text-green-600">R$ {averagePrice.toFixed(2)}</div>
+              <p className="text-sm text-gray-600">Preço Médio (página atual)</p>
             </div>
           </CardContent>
         </Card>
@@ -176,15 +194,15 @@ export default function ProductsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">{new Set(products.map((p) => p.unit)).size}</div>
-              <p className="text-sm text-gray-600">Tipos de Unidades</p>
+              <div className="text-2xl font-bold text-purple-600">{uniqueUnits}</div>
+              <p className="text-sm text-gray-600">Tipos de Unidades (página)</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-4">
-        {filteredProducts.length === 0 ? (
+        {products.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
               <div className="text-center py-8 text-gray-500">
@@ -193,7 +211,7 @@ export default function ProductsPage() {
             </CardContent>
           </Card>
         ) : (
-          filteredProducts.map((product) => (
+          products.map((product) => (
             <Card key={product.id}>
               <CardContent className="pt-6">
                 <div className="flex justify-between items-start">
@@ -203,23 +221,23 @@ export default function ProductsPage() {
                     </div>
                     <div className="text-sm text-gray-600 space-y-1">
                       <p>Descrição: {product.description}</p>
-                      <div className="flex gap-4">
+                      <div className="flex flex-wrap gap-4">
                         <p>
                           Preço: <span className="font-medium">R$ {product.price.toFixed(2)}</span>
                         </p>
                         <p>
                           Unidade: <span className="font-medium">{product.unit}</span>
                         </p>
+                      </div>
                       {isAdmin && (
                         <p className="text-xs text-gray-500">
                           Criado por: {getOwnerLabel(product.userId) ?? "Desconhecido"}
                         </p>
                       )}
-                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(product)}>
+                    <Button variant="outline" size="sm" onClick={() => setEditingProduct(product)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button
@@ -236,6 +254,35 @@ export default function ProductsPage() {
             </Card>
           ))
         )}
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-gray-600">
+          Página {pagination.page} de {totalPages} — {pagination.total} registros
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pagination.page === 1}
+            onClick={() => setPagination((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pagination.page >= totalPages}
+            onClick={() =>
+              setPagination((prev) => ({
+                ...prev,
+                page: Math.min(totalPages, prev.page + 1),
+              }))
+            }
+          >
+            Próxima
+          </Button>
+        </div>
       </div>
 
       {showForm && (
