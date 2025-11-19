@@ -13,58 +13,42 @@ interface ExpenseReportViewProps {
   onClose: () => void
 }
 
+const CATEGORY_SUMMARIES = [
+  { key: "alimentacao", label: "Alimenta��o", badge: "secondary", bg: "bg-blue-50", text: "text-blue-600" },
+  { key: "combustivel", label: "Combust��vel", badge: "default", bg: "bg-green-50", text: "text-green-600" },
+  { key: "pedagio", label: "Ped��gio", badge: "outline", bg: "bg-orange-50", text: "text-orange-600" },
+  { key: "fornecedor", label: "Fornecedor", badge: "destructive", bg: "bg-purple-50", text: "text-purple-600" },
+]
+
+const normalizeCategory = (value?: string | null) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+
+const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`
+
+const formatDate = (value?: string | Date | null) => {
+  if (!value) return "-"
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString("pt-BR")
+}
+
 export function ExpenseReportView({ expenses, startDate, endDate, onClose }: ExpenseReportViewProps) {
   const handlePrint = () => {
     window.print()
   }
 
   const handleExportExcel = () => {
-    const headers = ["Data", "Categoria", "Valor", "Fornecedor", "Observações"]
-    const rows = expenses.flatMap((expense) => {
-      const expenseRows = []
-
-      if (expense.food > 0) {
-        expenseRows.push([
-          new Date(expense.date).toLocaleDateString("pt-BR"),
-          "Alimentação",
-          `R$ ${expense.food.toFixed(2)}`,
-          expense.supplierName || "-",
-          expense.notes || "-",
-        ])
-      }
-
-      if (expense.fuel > 0) {
-        expenseRows.push([
-          new Date(expense.date).toLocaleDateString("pt-BR"),
-          "Combustível",
-          `R$ ${expense.fuel.toFixed(2)}`,
-          expense.supplierName || "-",
-          expense.notes || "-",
-        ])
-      }
-
-      if (expense.toll && expense.toll > 0) {
-        expenseRows.push([
-          new Date(expense.date).toLocaleDateString("pt-BR"),
-          "Pedágio",
-          `R$ ${expense.toll.toFixed(2)}`,
-          expense.supplierName || "-",
-          expense.notes || "-",
-        ])
-      }
-
-      if (expense.supplier > 0) {
-        expenseRows.push([
-          new Date(expense.date).toLocaleDateString("pt-BR"),
-          "Gasto com Fornecedor",
-          `R$ ${expense.supplier.toFixed(2)}`,
-          expense.supplierName || "-",
-          expense.notes || "-",
-        ])
-      }
-
-      return expenseRows
-    })
+    const headers = ["Data", "Categoria", "Valor", "Fornecedor", "Observa����es"]
+    const rows = expenses.map((expense) => [
+      formatDate(expense.date),
+      expense.category || "-",
+      formatCurrency(Number(expense.amount) || 0),
+      expense.supplierName || "-",
+      expense.observations || "-",
+    ])
 
     const csvContent = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n")
 
@@ -79,31 +63,27 @@ export function ExpenseReportView({ expenses, startDate, endDate, onClose }: Exp
     document.body.removeChild(link)
   }
 
-  const totalExpenses = expenses.reduce(
-    (sum, expense) => sum + expense.food + expense.fuel + (expense.toll || 0) + expense.supplier,
-    0,
-  )
+  const totalExpenses = expenses.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0)
 
-  const categoryTotals = expenses.reduce(
-    (totals, expense) => ({
-      food: totals.food + expense.food,
-      fuel: totals.fuel + expense.fuel,
-      toll: totals.toll + (expense.toll || 0),
-      supplier: totals.supplier + expense.supplier,
-    }),
-    { food: 0, fuel: 0, toll: 0, supplier: 0 },
-  )
+  const categoryTotals = expenses.reduce((totals, expense) => {
+    const key = normalizeCategory(expense.category)
+    const amount = Number(expense.amount) || 0
+    if (key && Object.prototype.hasOwnProperty.call(totals, key)) {
+      totals[key] += amount
+    }
+    return totals
+  }, CATEGORY_SUMMARIES.reduce((acc, category) => ({ ...acc, [category.key]: 0 }), {} as Record<string, number>))
 
   const periodText =
     startDate && endDate
-      ? `${new Date(startDate).toLocaleDateString("pt-BR")} a ${new Date(endDate).toLocaleDateString("pt-BR")}`
-      : "Todos os períodos"
+      ? `${formatDate(startDate)} a ${formatDate(endDate)}`
+      : "Todos os per��odos"
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <Card className="w-full max-w-4xl my-8">
         <CardHeader className="flex flex-row items-center justify-between print:hidden">
-          <CardTitle>Relatório de Gastos Diários</CardTitle>
+          <CardTitle>Relat��rio de Gastos Diǭrios</CardTitle>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Download className="h-4 w-4 mr-1" />
@@ -119,39 +99,26 @@ export function ExpenseReportView({ expenses, startDate, endDate, onClose }: Exp
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Cabeçalho do relatório */}
           <div className="text-center border-b pb-4">
-            <h1 className="text-2xl font-bold">RELATÓRIO DE GASTOS DIÁRIOS</h1>
-            <p className="text-gray-600">Período: {periodText}</p>
+            <h1 className="text-2xl font-bold">RELAT�\"RIO DE GASTOS DI�?RIOS</h1>
+            <p className="text-gray-600">Per��odo: {periodText}</p>
             <p className="text-sm text-gray-500">
-              Gerado em: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR")}
+              Gerado em: {new Date().toLocaleDateString("pt-BR")} ��s {new Date().toLocaleTimeString("pt-BR")}
             </p>
           </div>
 
-          {/* Resumo por categoria */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Resumo por Categoria</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-blue-50 p-4 rounded-lg text-center">
-                <p className="text-sm text-gray-600">Alimentação</p>
-                <p className="text-xl font-bold text-blue-600">R$ {categoryTotals.food.toFixed(2)}</p>
-              </div>
-              <div className="bg-green-50 p-4 rounded-lg text-center">
-                <p className="text-sm text-gray-600">Combustível</p>
-                <p className="text-xl font-bold text-green-600">R$ {categoryTotals.fuel.toFixed(2)}</p>
-              </div>
-              <div className="bg-orange-50 p-4 rounded-lg text-center">
-                <p className="text-sm text-gray-600">Pedágio</p>
-                <p className="text-xl font-bold text-orange-600">R$ {categoryTotals.toll.toFixed(2)}</p>
-              </div>
-              <div className="bg-purple-50 p-4 rounded-lg text-center">
-                <p className="text-sm text-gray-600">Fornecedores</p>
-                <p className="text-xl font-bold text-purple-600">R$ {categoryTotals.supplier.toFixed(2)}</p>
-              </div>
+              {CATEGORY_SUMMARIES.map((category) => (
+                <div key={category.key} className={`${category.bg} p-4 rounded-lg text-center`}>
+                  <p className="text-sm text-gray-600">{category.label}</p>
+                  <p className={`text-xl font-bold ${category.text}`}>{formatCurrency(categoryTotals[category.key])}</p>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Detalhamento dos gastos */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Detalhamento dos Gastos</h3>
             <div className="overflow-x-auto">
@@ -162,102 +129,57 @@ export function ExpenseReportView({ expenses, startDate, endDate, onClose }: Exp
                     <th className="border border-gray-300 p-2 text-left">Categoria</th>
                     <th className="border border-gray-300 p-2 text-right">Valor</th>
                     <th className="border border-gray-300 p-2 text-left">Fornecedor</th>
-                    <th className="border border-gray-300 p-2 text-left">Observações</th>
+                    <th className="border border-gray-300 p-2 text-left">Observa����es</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {expenses.map((expense) => {
-                    const rows = []
+                  {expenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="border border-gray-300 p-4 text-center text-gray-500">
+                        Nenhum gasto registrado para o per��odo selecionado.
+                      </td>
+                    </tr>
+                  ) : (
+                    expenses.map((expense) => {
+                      const normalized = normalizeCategory(expense.category)
+                      const summary = CATEGORY_SUMMARIES.find((cat) => cat.key === normalized)
+                      const amount = Number(expense.amount) || 0
 
-                    if (expense.food > 0) {
-                      rows.push(
-                        <tr key={`${expense.id}-food`}>
+                      return (
+                        <tr key={expense.id}>
+                          <td className="border border-gray-300 p-2">{formatDate(expense.date)}</td>
                           <td className="border border-gray-300 p-2">
-                            {new Date(expense.date).toLocaleDateString("pt-BR")}
+                            <Badge variant={summary?.badge ?? "outline"}>{expense.category || "N/A"}</Badge>
                           </td>
-                          <td className="border border-gray-300 p-2">
-                            <Badge variant="secondary">Alimentação</Badge>
-                          </td>
-                          <td className="border border-gray-300 p-2 text-right">R$ {expense.food.toFixed(2)}</td>
+                          <td className="border border-gray-300 p-2 text-right">{formatCurrency(amount)}</td>
                           <td className="border border-gray-300 p-2">{expense.supplierName || "-"}</td>
-                          <td className="border border-gray-300 p-2">{expense.notes || "-"}</td>
-                        </tr>,
+                          <td className="border border-gray-300 p-2">{expense.observations || "-"}</td>
+                        </tr>
                       )
-                    }
-
-                    if (expense.fuel > 0) {
-                      rows.push(
-                        <tr key={`${expense.id}-fuel`}>
-                          <td className="border border-gray-300 p-2">
-                            {new Date(expense.date).toLocaleDateString("pt-BR")}
-                          </td>
-                          <td className="border border-gray-300 p-2">
-                            <Badge variant="default">Combustível</Badge>
-                          </td>
-                          <td className="border border-gray-300 p-2 text-right">R$ {expense.fuel.toFixed(2)}</td>
-                          <td className="border border-gray-300 p-2">{expense.supplierName || "-"}</td>
-                          <td className="border border-gray-300 p-2">{expense.notes || "-"}</td>
-                        </tr>,
-                      )
-                    }
-
-                    if (expense.toll && expense.toll > 0) {
-                      rows.push(
-                        <tr key={`${expense.id}-toll`}>
-                          <td className="border border-gray-300 p-2">
-                            {new Date(expense.date).toLocaleDateString("pt-BR")}
-                          </td>
-                          <td className="border border-gray-300 p-2">
-                            <Badge variant="outline">Pedágio</Badge>
-                          </td>
-                          <td className="border border-gray-300 p-2 text-right">R$ {expense.toll.toFixed(2)}</td>
-                          <td className="border border-gray-300 p-2">{expense.supplierName || "-"}</td>
-                          <td className="border border-gray-300 p-2">{expense.notes || "-"}</td>
-                        </tr>,
-                      )
-                    }
-
-                    if (expense.supplier > 0) {
-                      rows.push(
-                        <tr key={`${expense.id}-supplier`}>
-                          <td className="border border-gray-300 p-2">
-                            {new Date(expense.date).toLocaleDateString("pt-BR")}
-                          </td>
-                          <td className="border border-gray-300 p-2">
-                            <Badge variant="destructive">Gasto com Fornecedor</Badge>
-                          </td>
-                          <td className="border border-gray-300 p-2 text-right">R$ {expense.supplier.toFixed(2)}</td>
-                          <td className="border border-gray-300 p-2">{expense.supplierName || "-"}</td>
-                          <td className="border border-gray-300 p-2">{expense.notes || "-"}</td>
-                        </tr>,
-                      )
-                    }
-
-                    return rows
-                  })}
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Total geral */}
           <div className="border-t pt-4">
             <div className="flex justify-between items-center text-xl font-bold">
               <span>Total Geral:</span>
-              <span>R$ {totalExpenses.toFixed(2)}</span>
+              <span>{formatCurrency(totalExpenses)}</span>
             </div>
             <div className="text-sm text-gray-600 mt-2">
               <p>Total de registros: {expenses.length}</p>
               <p>
-                Média por registro: R$ {expenses.length > 0 ? (totalExpenses / expenses.length).toFixed(2) : "0.00"}
+                M��dia por registro:{" "}
+                {expenses.length > 0 ? formatCurrency(totalExpenses / expenses.length) : formatCurrency(0)}
               </p>
             </div>
           </div>
 
-          {/* Rodapé */}
           <div className="text-center text-sm text-gray-500 border-t pt-4">
-            <p>Este relatório foi gerado automaticamente pelo Sistema de Gestão</p>
-            <p>Relatório de Gastos Diários - {new Date().toLocaleString("pt-BR")}</p>
+            <p>Este relat��rio foi gerado automaticamente pelo Sistema de Gestǜo</p>
+            <p>Relat��rio de Gastos Diǭrios - {new Date().toLocaleString("pt-BR")}</p>
           </div>
         </CardContent>
       </Card>
