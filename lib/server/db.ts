@@ -1,6 +1,7 @@
+// db.ts
 import { Pool, type PoolClient } from "pg"
 
-let pool: Pool | undefined
+let pool: Pool | null = null
 
 function createPool() {
   const connectionString = process.env.DATABASE_URL
@@ -14,8 +15,12 @@ function createPool() {
     connectionString,
     max: Number.isNaN(maxConnections) ? 3 : maxConnections,
     idleTimeoutMillis: 10_000,
-    connectionTimeoutMillis: 5_000,
-    ssl: connectionString.includes("supabase.co") ? { rejectUnauthorized: false } : undefined,
+    // aumenta um pouco o timeout de conexão pra evitar erro em free tier mais lento
+    connectionTimeoutMillis: 15_000,
+    // se for banco externo (supabase, neon, railway etc), força SSL
+    ssl: connectionString.includes("localhost") || connectionString.includes("127.0.0.1")
+      ? undefined
+      : { rejectUnauthorized: false },
   })
 }
 
@@ -36,7 +41,9 @@ export async function runQuery<T = any>(text: string, params?: any[]) {
   }
 }
 
-export async function withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+export async function withTransaction<T>(
+  callback: (client: PoolClient) => Promise<T>,
+): Promise<T> {
   const client = await getPool().connect()
   try {
     await client.query("BEGIN")
