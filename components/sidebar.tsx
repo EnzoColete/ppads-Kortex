@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { useState } from "react"
 import Image from "next/image"
 import { UserMenu } from "./user-menu"
+import { useOwnerDirectory } from "@/hooks/use-owner-directory"
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
@@ -34,6 +35,7 @@ const navigation = [
 export function Sidebar() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
+  const { isAdmin, loading } = useOwnerDirectory()
   const hideRoutes = ["/auth/login", "/auth/register"]
   const shouldHideSidebar = hideRoutes.some((route) => pathname?.startsWith(route))
 
@@ -75,7 +77,9 @@ export function Sidebar() {
 
         <nav className="mt-6 flex-1">
           <ul className="space-y-1 px-3">
-            {navigation.map((item) => {
+            {navigation
+              .filter((item) => !item.adminOnly || isAdmin || loading)
+              .map((item) => {
               const isActive = pathname === item.href
               return (
                 <li key={item.name}>

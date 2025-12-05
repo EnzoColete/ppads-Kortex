@@ -34,7 +34,7 @@ function isAdmin(role?: string | null) {
   return (role ?? "").toUpperCase() === "ADMIN"
 }
 
-function unauthorized(message = "Nao autenticado.") {
+function unauthorized(message = "Não autenticado.") {
   return NextResponse.json({ error: message }, { status: 401 })
 }
 

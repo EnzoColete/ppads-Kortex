@@ -71,7 +71,7 @@ export function ProtectedRoute({ children, allowedRoles, fallback }: ProtectedRo
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-red-600 mb-2">Acesso Negado</h1>
-            <p className="text-gray-600">Voce nao tem permissao para acessar esta pagina.</p>
+            <p className="text-gray-600">Você não tem permissão para acessar esta página.</p>
             <p className="text-sm text-gray-500 mt-2">Seu nivel de acesso: {userRole}</p>
           </div>
         </div>

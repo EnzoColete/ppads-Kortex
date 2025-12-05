@@ -90,7 +90,7 @@ export default function LoginPage() {
                     {isLoading ? "Entrando..." : "Entrar"}
                   </Button>
                   <p className="text-sm text-center text-gray-600">
-                    Nao possui conta? {" "}
+                    Não possui conta? {" "}
                     <Link href="/auth/register" className="text-blue-600 hover:underline">
                       Cadastre-se
                     </Link>

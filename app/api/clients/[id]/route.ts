@@ -38,7 +38,7 @@ function isAdmin(role?: string | null) {
 }
 
 function unauthorized() {
-  return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
+  return NextResponse.json({ error: "Não autenticado." }, { status: 401 })
 }
 
 export async function GET(_: Request, { params }: Params) {
@@ -207,7 +207,7 @@ export async function DELETE(_: Request, { params }: Params) {
 
     if (normalized.includes("violates foreign key constraint") || normalized.includes("constraint")) {
       return NextResponse.json(
-        { error: "Nao e possivel excluir o cliente pois existem registros vinculados (recibos, ordens, etc.)." },
+        { error: "Não é possível excluir o cliente pois existem registros vinculados (recibos, ordens, etc.)." },
         { status: 409 },
       )
     }

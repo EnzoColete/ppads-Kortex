@@ -81,16 +81,33 @@ const normalizeDailyExpenseCategory = (value: string) =>
     .replace(/[^a-z0-9]+/g, "")
     .trim()
 
-const mapDailyExpenseCategoryForDb = (value: string) => {
-  const slug = normalizeDailyExpenseCategory(value)
-  if (!DAILY_EXPENSE_CATEGORY_LABELS[slug]) {
-    const allowed = Object.values(DAILY_EXPENSE_CATEGORY_LABELS).join(", ")
-    throw new Error(`Categoria '${value}' não é aceita. Utilize uma das opções: ${allowed}.`)
-  }
-  return slug
+const mapDailyExpenseCategoryForDb = (value: string) => String(value ?? "").trim()
+
+const mapDailyExpenseCategoryForDisplay = (value: string) => {
+  const normalized = normalizeDailyExpenseCategory(value)
+  return DAILY_EXPENSE_CATEGORY_LABELS[normalized] ?? value
 }
 
-const mapDailyExpenseCategoryForDisplay = (value: string) => DAILY_EXPENSE_CATEGORY_LABELS[value] ?? value
+const listDailyExpenseCategories = async (): Promise<string[]> => {
+  try {
+    const response = await apiFetch("/api/daily-expenses/categories")
+    const payload = await safeParseJson(response)
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return [...Object.values(DAILY_EXPENSE_CATEGORY_LABELS)]
+      }
+      const message = payload?.error || "Erro ao listar categorias."
+      throw new Error(message)
+    }
+
+    const rows = Array.isArray(payload?.data) ? payload.data : []
+    return rows.map((value: string) => mapDailyExpenseCategoryForDisplay(value))
+  } catch (error) {
+    console.error("Error fetching daily expense categories:", error)
+    return [...Object.values(DAILY_EXPENSE_CATEGORY_LABELS)]
+  }
+}
 
 const mapProductFromApi = (product: any): Product => ({
   id: product.id,
@@ -118,11 +135,11 @@ const listSuppliers = async (options: ListRequestParams = {}): Promise<Paginated
     const payload = await safeParseJson(response)
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
+      if (response.status !== 401 && response.status !== 403) {
+        const message = payload?.error || "Erro ao listar fornecedores."
+        console.warn("listSuppliers failed:", message)
       }
-      const message = payload?.error || "Erro ao listar fornecedores."
-      throw new Error(message)
+      return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
     }
 
     const rows = Array.isArray(payload?.data) ? payload.data : []
@@ -234,11 +251,11 @@ const listClients = async (options: ListRequestParams = {}): Promise<PaginatedRe
     const payload = await safeParseJson(response)
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
+      if (response.status !== 401 && response.status !== 403) {
+        const message = payload?.error || "Erro ao listar clientes."
+        console.warn("listClients failed:", message)
       }
-      const message = payload?.error || "Erro ao listar clientes."
-      throw new Error(message)
+      return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
     }
 
     const rows = Array.isArray(payload?.data) ? payload.data : []
@@ -479,11 +496,11 @@ const listReceipts = async (options: ListRequestParams = {}): Promise<PaginatedR
     const payload = await safeParseJson(response)
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
+      if (response.status !== 401 && response.status !== 403) {
+        const message = payload?.error || "Erro ao listar recibos."
+        console.warn("listReceipts failed:", message)
       }
-      const message = payload?.error || "Erro ao listar recibos."
-      throw new Error(message)
+      return { data: [], meta: { page: 1, pageSize: options.pageSize ?? 0, total: 0 } }
     }
 
     const rows = Array.isArray(payload?.data) ? payload.data : []
@@ -932,11 +949,13 @@ export const serviceOrderStorage = {
     return true
   },
 }
-export const getSuppliers = async (): Promise<Supplier[]> => await supplierStorage.getAll()
+export const getSuppliers = async (options?: { limit?: number }): Promise<Supplier[]> =>
+  await supplierStorage.getAll(options)
 export const getClients = async (): Promise<Client[]> => await clientStorage.getAll()
 export const getProducts = async (): Promise<Product[]> => await productStorage.getAll()
 export const getReceipts = async (): Promise<Receipt[]> => await receiptStorage.getAll()
 export const getAlerts = async (): Promise<Alert[]> => await alertStorage.getAll()
+export const getDailyExpenseCategories = async (): Promise<string[]> => await listDailyExpenseCategories()
 export const getDailyExpenses = async (): Promise<DailyExpense[]> => await dailyExpenseStorage.getAll()
 export const getReports = async (): Promise<Report[]> => await reportStorage.getAll()
 export const getCalendarEvents = async (): Promise<CalendarEvent[]> => await calendarEventStorage.getAll()

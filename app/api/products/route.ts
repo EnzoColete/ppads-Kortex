@@ -72,7 +72,7 @@ function isAdmin(role: string | undefined | null) {
 }
 
 function unauthorized() {
-  return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
+  return NextResponse.json({ error: "Não autenticado." }, { status: 401 })
 }
 
 const parseQueryParams = (request: Request) => {

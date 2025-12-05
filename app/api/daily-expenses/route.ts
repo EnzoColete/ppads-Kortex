@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { runQuery } from "@/lib/server/db"
 
 const CATEGORY_LABELS: Record<string, string> = {
-  alimentacao: "Alimentaçao",
+  alimentacao: "Alimentação",
   combustivel: "Combustível",
   pedagio: "Pedágio",
   fornecedor: "Fornecedor",
@@ -18,25 +18,59 @@ function normalizeCategory(value: string) {
     .trim()
 }
 
-function mapCategoryForDb(value: string) {
-  const slug = normalizeCategory(value)
-  if (!CATEGORY_LABELS[slug]) {
-    const allowed = Object.values(CATEGORY_LABELS).join(", ")
-    throw new Error(`Categoria '${value}' nao e aceita. Utilize uma das opcoes: ${allowed}.`)
-  }
-  return slug
-}
-
 function mapCategoryForDisplay(value: string) {
-  return CATEGORY_LABELS[value] ?? value
+  const normalized = normalizeCategory(value)
+  return CATEGORY_LABELS[normalized] ?? value
 }
 
 function unauthorized() {
-  return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
+  return NextResponse.json({ error: "Não autenticado." }, { status: 401 })
 }
 
 function isAdmin(role?: string | null) {
   return (role ?? "").toUpperCase() === "ADMIN"
+}
+
+let categorySchemaRelaxed = false
+
+async function ensureCategoryIsFlexible() {
+  if (categorySchemaRelaxed) return
+
+  try {
+    await runQuery(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.table_constraints
+          WHERE constraint_name = 'daily_expenses_category_check'
+            AND table_name = 'daily_expenses'
+            AND table_schema = 'public'
+        ) THEN
+          ALTER TABLE public.daily_expenses DROP CONSTRAINT daily_expenses_category_check;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'daily_expenses'
+            AND column_name = 'category'
+            AND data_type <> 'character varying'
+        ) THEN
+          ALTER TABLE public.daily_expenses ALTER COLUMN category TYPE varchar(100) USING category::text;
+        END IF;
+
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'daily_expense_category') THEN
+          DROP TYPE daily_expense_category;
+        END IF;
+      END
+      $$;
+    `)
+    categorySchemaRelaxed = true
+  } catch (error) {
+    console.error("Failed to relax daily_expenses.category constraint:", error)
+  }
 }
 
 export async function GET() {
@@ -111,7 +145,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Data, categoria e valor sao obrigatorios." }, { status: 400 })
     }
 
-    const category = mapCategoryForDb(String(payload.category))
+    await ensureCategoryIsFlexible()
+
+    const rawCategory = String(payload.category ?? "").trim()
+    if (!rawCategory) {
+      return NextResponse.json({ error: "Categoria invalida." }, { status: 400 })
+    }
+
+    const category = rawCategory
     const amount = Number(payload.amount)
     if (Number.isNaN(amount) || amount <= 0) {
       return NextResponse.json({ error: "Valor invalido." }, { status: 400 })

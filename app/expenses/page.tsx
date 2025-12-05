@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,20 +10,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Trash2, Plus, FileText, Calendar, Edit2, X } from "lucide-react"
 import type { DailyExpense, Supplier } from "@/lib/types"
-import { getSuppliers, getDailyExpenses, saveDailyExpense, deleteDailyExpense } from "@/lib/storage"
-import { ExpenseReportView } from "@/components/expense-report-view"
+import {
+  getSuppliers,
+  getDailyExpenses,
+  getDailyExpenseCategories,
+  saveDailyExpense,
+  deleteDailyExpense,
+} from "@/lib/storage"
+import dynamic from "next/dynamic"
 import { useOwnerDirectory } from "@/hooks/use-owner-directory"
 import { showErrorToast, showSuccessToast, showWarningToast } from "@/lib/toast"
+
+const ExpenseReportView = dynamic(() => import("@/components/expense-report-view"), { ssr: false })
 
 const DEFAULT_CATEGORIES = ["Alimentação", "Combustível", "Pedágio", "Fornecedor"]
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<DailyExpense[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [suppliersLoading, setSuppliersLoading] = useState(false)
+  const [suppliersLoaded, setSuppliersLoaded] = useState(false)
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [filterType, setFilterType] = useState<"all" | "today" | "week" | "month" | "custom">("all")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
@@ -39,35 +50,91 @@ export default function ExpensesPage() {
     notes: "",
   })
 
-  const { isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
+  const { currentUser, isAdmin, getOwnerLabel, owners } = useOwnerDirectory()
   const [ownerFilter, setOwnerFilter] = useState("all")
 
   // Auxiliar tradicional para moeda
   const formatBRL = (n: number) =>
     n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 })
 
+  const normalizeCategoryLabel = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "")
+      .trim()
+
+  const mergeCategories = (...groups: string[][]) => {
+    const seen = new Set<string>()
+    const result: string[] = []
+    groups.forEach((group) => {
+      group.forEach((item) => {
+        const normalized = normalizeCategoryLabel(item)
+        if (!normalized || seen.has(normalized)) return
+        seen.add(normalized)
+        result.push(item)
+      })
+    })
+    return result
+  }
+
+  const categoryStorageKey = useMemo(
+    () => (currentUser ? `expenseCategories:${currentUser.id}` : "expenseCategories"),
+    [currentUser],
+  )
+
+  const normalizedCategories = useMemo(
+    () => new Set(categories.map((cat) => normalizeCategoryLabel(cat))),
+    [categories],
+  )
+
   useEffect(() => {
-    const savedCategories = typeof window !== "undefined" ? localStorage.getItem("expenseCategories") : null
-    if (savedCategories) {
+    let cancelled = false
+
+    const loadCategories = async () => {
       try {
-        setCategories(JSON.parse(savedCategories))
-      } catch {
-        // se der erro, mantém as categorias padrão
+        const savedRaw = typeof window !== "undefined" ? localStorage.getItem(categoryStorageKey) : null
+        let savedCategories: string[] = []
+        if (savedRaw) {
+          try {
+            savedCategories = JSON.parse(savedRaw)
+          } catch {
+            savedCategories = []
+          }
+        }
+
+        const fetched = await getDailyExpenseCategories()
+        if (cancelled) return
+
+        const merged = mergeCategories(DEFAULT_CATEGORIES, fetched, savedCategories)
+        setCategories(merged)
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem(categoryStorageKey, JSON.stringify(savedCategories))
+        }
+      } catch (error) {
+        console.error("Erro ao carregar categorias:", error)
+        setCategories(DEFAULT_CATEGORIES)
       }
     }
-  }, [])
+
+    loadCategories()
+
+    return () => {
+      cancelled = true
+    }
+  }, [categoryStorageKey])
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true)
-        const [expensesData, suppliersData] = await Promise.all([getDailyExpenses(), getSuppliers()])
+        const expensesData = await getDailyExpenses()
         setExpenses(expensesData || [])
-        setSuppliers(suppliersData || [])
       } catch (error) {
         console.error("Erro ao carregar dados:", error)
         setExpenses([])
-        setSuppliers([])
         showErrorToast("Erro ao carregar despesas do dia.")
       } finally {
         setLoading(false)
@@ -82,13 +149,40 @@ export default function ExpensesPage() {
     }
   }, [isAdmin])
 
+  const ensureSuppliers = async () => {
+    if (suppliersLoaded || suppliersLoading) return
+    try {
+      setSuppliersLoading(true)
+      const suppliersData = await getSuppliers({ limit: 300 })
+      setSuppliers(suppliersData || [])
+      setSuppliersLoaded(true)
+    } catch (error) {
+      console.error("Erro ao carregar fornecedores:", error)
+      showErrorToast("Não foi possível carregar fornecedores.")
+    } finally {
+      setSuppliersLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isFormOpen) {
+      void ensureSuppliers()
+    }
+  }, [isFormOpen])
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSearch(searchTerm), 200)
+    return () => clearTimeout(handle)
+  }, [searchTerm])
+
   const handleAddCategory = () => {
     const value = newCategory.trim()
-    if (value && !categories.includes(value)) {
+    const normalized = normalizeCategoryLabel(value)
+    if (value && normalized && !normalizedCategories.has(normalized)) {
       const updated = [...categories, value]
       setCategories(updated)
       if (typeof window !== "undefined") {
-        localStorage.setItem("expenseCategories", JSON.stringify(updated))
+        localStorage.setItem(categoryStorageKey, JSON.stringify(updated))
       }
       setNewCategory("")
     }
@@ -102,7 +196,7 @@ export default function ExpensesPage() {
     const updated = categories.filter((c) => c !== category)
     setCategories(updated)
     if (typeof window !== "undefined") {
-      localStorage.setItem("expenseCategories", JSON.stringify(updated))
+      localStorage.setItem(categoryStorageKey, JSON.stringify(updated))
     }
   }
 
@@ -196,33 +290,44 @@ export default function ExpensesPage() {
     }
   }
 
-  const filteredExpenses = expenses.filter((expense) => {
-    const matchesSearch =
-      expense.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.observations?.toLowerCase().includes(searchTerm.toLowerCase())
+  const dateRange = getDateRange()
 
-    const dateRange = getDateRange()
-    let matchesDate = true
+  const filteredExpenses = useMemo(() => {
+    const search = debouncedSearch.toLowerCase()
+    return expenses.filter((expense) => {
+      const matchesSearch =
+        expense.category?.toLowerCase().includes(search) ||
+        expense.supplierName?.toLowerCase().includes(search) ||
+        expense.observations?.toLowerCase().includes(search)
 
-    if (dateRange.start && dateRange.end) {
-      const expenseDate = expense.date
-      matchesDate = expenseDate >= dateRange.start && expenseDate <= dateRange.end
-    }
+      let matchesDate = true
 
-    const matchesOwner = !isAdmin || ownerFilter === "all" || expense.userId === ownerFilter
+      if (dateRange.start && dateRange.end) {
+        const expenseDate = expense.date
+        matchesDate = expenseDate >= dateRange.start && expenseDate <= dateRange.end
+      }
 
-    return matchesSearch && matchesDate && matchesOwner
-  })
+      const matchesOwner = !isAdmin || ownerFilter === "all" || expense.userId === ownerFilter
 
-  const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0)
+      return matchesSearch && matchesDate && matchesOwner
+    })
+  }, [debouncedSearch, expenses, dateRange.end, dateRange.start, isAdmin, ownerFilter])
 
-  const expensesByCategory = filteredExpenses.reduce(
-    (acc, expense) => {
-      acc[expense.category] = (acc[expense.category] || 0) + expense.amount
-      return acc
-    },
-    {} as Record<string, number>,
+  const totalExpenses = useMemo(
+    () => filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+    [filteredExpenses],
+  )
+
+  const expensesByCategory = useMemo(
+    () =>
+      filteredExpenses.reduce(
+        (acc, expense) => {
+          acc[expense.category] = (acc[expense.category] || 0) + expense.amount
+          return acc
+        },
+        {} as Record<string, number>,
+      ),
+    [filteredExpenses],
   )
 
   if (loading) {
@@ -234,8 +339,6 @@ export default function ExpensesPage() {
       </div>
     )
   }
-
-  const dateRange = getDateRange()
 
   return (
     <div className="p-6">
@@ -495,14 +598,17 @@ export default function ExpensesPage() {
 
                   <div>
                     <Label>Fornecedor</Label>
-                    <Select
-                      value={formData.supplierName}
-                      onValueChange={(v) => setFormData({ ...formData, supplierName: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Opcional" />
-                      </SelectTrigger>
-                      <SelectContent>
+                  <Select
+                    value={formData.supplierName}
+                    onValueChange={(v) => setFormData({ ...formData, supplierName: v })}
+                    onOpenChange={(open) => {
+                      if (open) void ensureSuppliers()
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Opcional" />
+                    </SelectTrigger>
+                    <SelectContent>
                         {suppliers.map((s) => (
                           <SelectItem key={s.id} value={s.name}>
                             {s.name}

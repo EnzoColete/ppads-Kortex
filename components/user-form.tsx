@@ -66,7 +66,7 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
                 required
                 disabled={Boolean(user)}
               />
-              {user && <p className="text-xs text-gray-500 mt-1">O email nao pode ser alterado</p>}
+              {user && <p className="text-xs text-gray-500 mt-1">O e-mail não pode ser alterado</p>}
             </div>
 
             <div>

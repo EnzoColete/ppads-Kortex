@@ -82,7 +82,7 @@ async function ensureAuthUser({ email, password, fullName }) {
 
   const existing = data?.users?.find((user) => user.email?.toLowerCase() === email)
   if (existing) {
-    console.log(`? Usu�rio ${email} j� existe. Atualizando senha e marcando como confirmado.`)
+    console.log(`✅ Usuário ${email} já existe. Atualizando senha e marcando como confirmado.`)
     const { error: updateError } = await authClient.auth.admin.updateUserById(existing.id, {
       password,
       email_confirm: false,
@@ -92,7 +92,7 @@ async function ensureAuthUser({ email, password, fullName }) {
     return existing
   }
 
-  console.log(`? Criando usu�rio ${email}.`)
+  console.log(`✅ Criando usuário ${email}.`)
   const { data: created, error: createError } = await authClient.auth.admin.createUser({
     email,
     password,
@@ -125,17 +125,17 @@ async function run() {
   await ensureUsersTable()
 
   for (const seed of seeds) {
-    console.log(`\n??  Processando ${seed.email}`)
+    console.log(`\n🚀  Processando ${seed.email}`)
     const authUser = await ensureAuthUser(seed)
     await upsertUserRecord(authUser, seed)
-    console.log(`? Usu�rio ${seed.email} pronto.`)
+    console.log(`✅ Usuário ${seed.email} pronto.`)
   }
 }
 
 run()
   .then(async () => {
     await pgClient.end()
-    console.log("\n?? Bootstrap conclu�do. Agora voc� pode fazer login com as credenciais configuradas.")
+    console.log("\n🎉 Bootstrap concluído. Agora você pode fazer login com as credenciais configuradas.")
     process.exit(0)
   })
   .catch(async (error) => {

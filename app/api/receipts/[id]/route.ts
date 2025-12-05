@@ -24,7 +24,7 @@ function isAdmin(role?: string | null) {
 }
 
 function unauthorized() {
-  return NextResponse.json({ error: "Nao autenticado." }, { status: 401 })
+  return NextResponse.json({ error: "Não autenticado." }, { status: 401 })
 }
 
 function mapReceiptProduct(row: any) {

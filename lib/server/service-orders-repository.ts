@@ -108,7 +108,7 @@ async function ensureUniqueOrderNumber(client: PoolClient, requestedOrderNumber?
     }
   }
 
-  throw new Error("Nao foi possivel gerar um numero de OS unico. Tente novamente.")
+  throw new Error("Não foi possível gerar um número de OS único. Tente novamente.")
 }
 
 async function withConnection<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
@@ -256,10 +256,10 @@ export const serviceOrdersRepository = {
         )
 
         if (clientCheck.rowCount === 0) {
-          throw new Error("Cliente informado nao existe.")
+          throw new Error("Cliente informado não existe.")
         }
         if (!context.isAdmin && clientCheck.rows[0].user_id !== context.userId) {
-          throw new Error("Cliente informado nao pertence ao usuario autenticado.")
+          throw new Error("Cliente informado não pertence ao usuário autenticado.")
         }
 
         const orderNumber = await ensureUniqueOrderNumber(client, order.orderNumber)
@@ -282,13 +282,13 @@ export const serviceOrdersRepository = {
           const missingIds = productIds.filter((id) => !foundIds.has(id))
 
           if (missingIds.length > 0) {
-            throw new Error(`Produto informado nao existe: ${missingIds.join(", ")}`)
+            throw new Error(`Produto informado não existe: ${missingIds.join(", ")}`)
           }
 
           if (!context.isAdmin) {
             const unauthorized = productRows.find((row) => row.user_id !== context.userId)
             if (unauthorized) {
-              throw new Error("Produto informado nao pertence ao usuario autenticado.")
+              throw new Error("Produto informado não pertence ao usuário autenticado.")
             }
           }
         }
